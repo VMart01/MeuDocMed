@@ -84,18 +84,24 @@ def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
     """Retorna os bytes do arquivo ou None se não encontrado."""
     if _cloudinary_configured():
         import requests as req
-        from cloudinary.utils import cloudinary_url
+        from cloudinary.utils import private_download_url
         _init_cloudinary()
         try:
-            # Extrai o public_id da URL e gera URL assinada (resolve 401 em contas
-            # com strict mode ou upload preset Signed)
+            # Extrai public_id da URL armazenada
             public_id = (_public_id_from_url(stored_id)
                          if stored_id.startswith('https://') else stored_id)
-            signed_url, _ = cloudinary_url(
-                public_id, resource_type='raw', sign_url=True, secure=True)
-            logger.info("Cloudinary fetch (signed): %s", signed_url[:100])
-            r = req.get(signed_url, timeout=20)
-            logger.info("Cloudinary fetch status: %s", r.status_code)
+            # Separa extensão (private_download_url precisa de pid sem ext + fmt)
+            basename = public_id.split('/')[-1]
+            if '.' in basename:
+                pid_no_ext, fmt = public_id.rsplit('.', 1)
+            else:
+                pid_no_ext, fmt = public_id, ''
+            # private_download_url gera URL autenticada via API Cloudinary
+            # (bypass CDN — resolve 401 independente das configurações da conta)
+            dl_url = private_download_url(pid_no_ext, fmt, resource_type='raw')
+            logger.error("Cloudinary private_download pid=%s fmt=%s", pid_no_ext, fmt)
+            r = req.get(dl_url, timeout=30)
+            logger.error("Cloudinary fetch status: %s", r.status_code)
             if r.status_code == 200:
                 return r.content
             logger.error("Cloudinary fetch falhou: %s — %s", r.status_code, r.text[:200])
