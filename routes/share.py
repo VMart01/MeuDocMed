@@ -2,6 +2,7 @@
 Rota pública de acesso via link temporário de compartilhamento.
 Sem autenticação necessária.
 """
+import io
 import os
 from datetime import datetime
 
@@ -10,6 +11,7 @@ from flask import (Blueprint, render_template, abort, send_file,
 
 from models import db, ShareLink, Document, AccessLog, DOCUMENT_CATEGORIES
 from utils.file_utils import get_mime_type, is_viewable_inline
+from utils import storage
 
 share_bp = Blueprint('share', __name__)
 
@@ -82,17 +84,15 @@ def visualizar_documento(token, doc_id):
 
     doc = Document.query.filter_by(id=doc_id, patient_id=link.patient_id).first_or_404()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
-
-    if not os.path.exists(file_path):
-        abort(404)
-
     mime = get_mime_type(doc.original_filename)
     inline = is_viewable_inline(doc.original_filename)
 
+    file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
+    if not file_bytes:
+        abort(404)
+
     return send_file(
-        file_path,
+        io.BytesIO(file_bytes),
         mimetype=mime,
         as_attachment=not inline,
         download_name=doc.original_filename if not inline else None,

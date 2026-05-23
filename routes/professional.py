@@ -298,13 +298,6 @@ def visualizar_documento(patient_id, doc_id):
 
     doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
-
-    if not os.path.exists(file_path):
-        flash('Arquivo não encontrado.', 'danger')
-        return redirect(url_for('professional.prontuario', patient_id=patient_id))
-
     mime = get_mime_type(doc.original_filename)
     inline = is_viewable_inline(doc.original_filename)
 
@@ -317,7 +310,12 @@ def visualizar_documento(patient_id, doc_id):
         return redirect(url_for('professional.viewer_documento',
                                 patient_id=patient_id, doc_id=doc_id))
 
-    return send_file(file_path, mimetype=mime, as_attachment=not inline,
+    file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
+    if not file_bytes:
+        flash('Arquivo não encontrado no servidor.', 'danger')
+        return redirect(url_for('professional.prontuario', patient_id=patient_id))
+
+    return send_file(io.BytesIO(file_bytes), mimetype=mime, as_attachment=not inline,
                      download_name=doc.original_filename if not inline else None)
 
 
@@ -337,16 +335,18 @@ def download_documento(patient_id, doc_id):
         return redirect(url_for('professional.prontuario', patient_id=patient_id))
 
     doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
-
     mime = get_mime_type(doc.original_filename)
 
     log_access(patient_id, 'download_doc',
                f'Profissional {professional.name} fez download de "{doc.name}".',
                professional.id)
 
-    return send_file(file_path, mimetype=mime, as_attachment=True,
+    file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
+    if not file_bytes:
+        flash('Arquivo não encontrado no servidor.', 'danger')
+        return redirect(url_for('professional.prontuario', patient_id=patient_id))
+
+    return send_file(io.BytesIO(file_bytes), mimetype=mime, as_attachment=True,
                      download_name=doc.original_filename)
 
 
