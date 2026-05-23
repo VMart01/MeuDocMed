@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Link Inválido | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card" style="text-align:center">
+    <div style="font-size:4rem;color:#e53935;margin-bottom:1rem">
+      <i class="fa fa-link-slash"></i>
+    </div>
+    <h1 style="color:#e53935">Link Inválido ou Expirado</h1>
+    <p style="color:#555;margin:1rem 0">
+      Este link de compartilhamento não existe, foi revogado pelo paciente ou expirou.
+    </p>
+    <a href="{{ url_for('auth.index') }}" class="btn btn-primary">
+      <i class="fa fa-house"></i> Ir para o início
+    </a>
+  </div>
+</div>
+{% endblock %}

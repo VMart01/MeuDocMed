@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Cadastro — Profissional | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container auth-container-wide">
+  <div class="auth-card">
+    <div class="auth-header">
+      <a href="{{ url_for('auth.index') }}" class="auth-brand">
+        <i class="fa fa-file-medical"></i> MeuDocMed
+      </a>
+      <h1>Cadastro de Profissional</h1>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="name">Nome Completo *</label>
+          <input type="text" id="name" name="name" required
+                 value="{{ form_data.get('name', '') }}" placeholder="Nome completo">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="prof_type">Tipo de Profissional *</label>
+          <select id="prof_type" name="prof_type" required onchange="updateRegistrationHint()">
+            <option value="">Selecione...</option>
+            {% for value, label in prof_types %}
+              <option value="{{ value }}" {% if form_data.get('prof_type') == value %}selected{% endif %}>
+                {{ label }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="registration">Número de Registro *</label>
+          <input type="text" id="registration" name="registration" required
+                 value="{{ form_data.get('registration', '') }}"
+                 placeholder="Ex: CRM/SP-123456">
+          <small class="form-hint" id="reg-hint">
+            Use o formato SIGLA/UF-NUMERO (ex: CRM/SP-123456). ACS: use o CPF.
+          </small>
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="cpf">CPF *</label>
+          <input type="text" id="cpf" name="cpf" required
+                 value="{{ form_data.get('cpf', '') }}"
+                 placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="specialty">Especialidade</label>
+          <input type="text" id="specialty" name="specialty"
+                 value="{{ form_data.get('specialty', '') }}"
+                 placeholder="Ex: Clínica Geral, Cardiologia...">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="email">E-mail *</label>
+          <input type="email" id="email" name="email" required
+                 value="{{ form_data.get('email', '') }}"
+                 placeholder="seu@email.com">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="password">Senha * <small>(mínimo 6 caracteres)</small></label>
+          <div class="input-icon-toggle">
+            <input type="password" id="password" name="password" required minlength="6"
+                   placeholder="Crie uma senha">
+            <button type="button" class="toggle-pw" tabindex="-1">
+              <i class="fa fa-eye"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="password2">Confirmar Senha *</label>
+          <div class="input-icon-toggle">
+            <input type="password" id="password2" name="password2" required minlength="6"
+                   placeholder="Repita a senha">
+            <button type="button" class="toggle-pw" tabindex="-1">
+              <i class="fa fa-eye"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">
+        <i class="fa fa-user-plus"></i> Criar Conta Profissional
+      </button>
+    </form>
+
+    <div class="auth-links">
+      <a href="{{ url_for('auth.login_profissional') }}">Já tenho conta — Fazer login</a>
+    </div>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+const regHints = {
+  medico: 'Formato: CRM/UF-NUMERO (ex: CRM/SP-123456)',
+  enfermeiro: 'Formato: COREN/UF-NUMERO (ex: COREN/RJ-654321)',
+  dentista: 'Formato: CRO/UF-NUMERO (ex: CRO/MG-111222)',
+  farmaceutico: 'Formato: CRF/UF-NUMERO (ex: CRF/BA-333444)',
+  fisioterapeuta: 'Formato: CREFITO/UF-NUMERO (ex: CREFITO/RS-555666)',
+  acs: 'Agentes Comunitários de Saúde devem usar o CPF como identificação.',
+};
+function updateRegistrationHint() {
+  const sel = document.getElementById('prof_type').value;
+  const hint = document.getElementById('reg-hint');
+  hint.textContent = regHints[sel] || 'Use o formato SIGLA/UF-NUMERO.';
+  if (sel === 'acs') {
+    document.getElementById('registration').placeholder = 'Digite seu CPF';
+  } else {
+    document.getElementById('registration').placeholder = 'Ex: CRM/SP-123456';
+  }
+}
+</script>
+{% endblock %}
+{% endblock %}

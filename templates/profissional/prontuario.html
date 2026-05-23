@@ -1,0 +1,179 @@
+{% extends "profissional_base.html" %}
+{% block title %}Prontuário de {{ patient.name }} | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1><i class="fa fa-folder-open"></i> Prontuário</h1>
+    <div class="patient-subtitle">
+      {{ patient.name }} · <code>{{ patient.cpf_formatted }}</code>
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="access-timer" id="access-timer">
+      <i class="fa fa-clock"></i>
+      <span id="timer-display">Calculando...</span>
+    </div>
+    <a href="{{ url_for('professional.upload_documento', patient_id=patient.id) }}" class="btn btn-outline">
+      <i class="fa fa-cloud-arrow-up"></i> Adicionar Documento
+    </a>
+    <a href="{{ url_for('professional.portal') }}" class="btn btn-outline">
+      <i class="fa fa-arrow-left"></i> Voltar
+    </a>
+  </div>
+</div>
+
+{% if access.allow_download %}
+  <div class="info-box info-box-green">
+    <i class="fa fa-circle-check"></i>
+    <p>O paciente autorizou o download dos arquivos.</p>
+  </div>
+{% else %}
+  <div class="info-box info-box-yellow">
+    <i class="fa fa-eye"></i>
+    <p>Apenas visualização — o paciente não autorizou download.</p>
+  </div>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Dados do Paciente -->
+{% if patient.clinical_notes %}
+  <div class="clinical-notes-box">
+    <h3><i class="fa fa-note-sticky"></i> Observações Clínicas</h3>
+    <p>{{ patient.clinical_notes }}</p>
+  </div>
+{% endif %}
+
+<!-- Medicamentos Ativos -->
+{% if meds_ativos %}
+  <div class="meds-summary">
+    <h3><i class="fa fa-pills"></i> Medicamentos Ativos ({{ meds_ativos|length }})</h3>
+    <div class="meds-chips">
+      {% for med in meds_ativos %}
+        <span class="med-chip">
+          <strong>{{ med.name }}</strong>
+          {% if med.dose %} {{ med.dose }}{% endif %}
+          {% if med.frequency %} · {{ med.frequency }}{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+{% endif %}
+
+<!-- Estatísticas -->
+<div class="stats-grid">
+  {% for cat, count in cat_stats.items() %}
+    <div class="stat-card stat-card-sm">
+      <span class="stat-number">{{ count }}</span>
+      <span class="stat-label">{{ cat }}</span>
+    </div>
+  {% endfor %}
+</div>
+
+<!-- Documentos -->
+<div class="section-header">
+  <h2><i class="fa fa-file-medical"></i> Documentos</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filter-bar">
+  <form method="get" class="filter-form">
+    <div class="filter-tabs">
+      <a href="{{ url_for('professional.prontuario', patient_id=patient.id) }}"
+         class="filter-tab {% if not selected_category %}active{% endif %}">Todos</a>
+      {% for cat_key, cat_label in categories %}
+        <a href="{{ url_for('professional.prontuario', patient_id=patient.id, category=cat_key, search=search) }}"
+           class="filter-tab {% if selected_category == cat_key %}active{% endif %}">{{ cat_label }}</a>
+      {% endfor %}
+    </div>
+    <div class="filter-controls">
+      <input type="hidden" name="category" value="{{ selected_category }}">
+      <input type="text" name="search" value="{{ search }}"
+             placeholder="Buscar por nome..." class="search-input"
+             onchange="this.form.submit()">
+      <select name="order" class="sort-select" onchange="this.form.submit()">
+        <option value="recent" {% if order == 'recent' %}selected{% endif %}>Mais recente</option>
+        <option value="oldest" {% if order == 'oldest' %}selected{% endif %}>Mais antigo</option>
+        <option value="alpha" {% if order == 'alpha' %}selected{% endif %}>A-Z</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if docs %}
+  <div class="doc-grid">
+    {% for doc in docs %}
+      <div class="doc-card">
+        <div class="doc-card-icon">
+          {% if doc.extension == 'pdf' %}<i class="fa fa-file-pdf"></i>
+          {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}<i class="fa fa-file-image"></i>
+          {% elif doc.extension in ['doc','docx'] %}<i class="fa fa-file-word"></i>
+          {% elif doc.extension in ['xls','xlsx'] %}<i class="fa fa-file-excel"></i>
+          {% else %}<i class="fa fa-file-lines"></i>{% endif %}
+        </div>
+        <div class="doc-card-body">
+          <h3 class="doc-card-name">{{ doc.name }}</h3>
+          <div class="doc-card-meta">
+            <span class="badge badge-cat">{{ doc.category_display }}</span>
+            <span class="doc-size">{{ doc.file_size_display }}</span>
+          </div>
+          <div class="doc-card-date">
+            <i class="fa fa-calendar"></i> {{ doc.created_at.strftime('%d/%m/%Y') }}
+            {% if doc.uploaded_by_professional_id %}
+              <span class="badge badge-prof"><i class="fa fa-stethoscope"></i> Prof.</span>
+            {% endif %}
+          </div>
+          {% if doc.observation %}<p class="doc-observation">{{ doc.observation }}</p>{% endif %}
+        </div>
+        <div class="doc-card-actions">
+          <a href="{{ url_for('professional.visualizar_documento', patient_id=patient.id, doc_id=doc.id) }}"
+             target="_blank" class="btn btn-sm btn-outline">
+            <i class="fa fa-eye"></i> Ver
+          </a>
+          {% if access.allow_download %}
+            <a href="{{ url_for('professional.download_documento', patient_id=patient.id, doc_id=doc.id) }}"
+               class="btn btn-sm btn-outline">
+              <i class="fa fa-download"></i>
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <i class="fa fa-folder-open"></i>
+    <h2>Nenhum documento encontrado</h2>
+  </div>
+{% endif %}
+
+{% block extra_scripts %}
+<script>
+// Countdown do acesso
+const expiresAt = new Date("{{ access.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z");
+function updateTimer() {
+  const now = new Date();
+  const diff = expiresAt - now;
+  if (diff <= 0) {
+    document.getElementById('timer-display').textContent = 'Acesso expirado';
+    document.getElementById('access-timer').classList.add('timer-expired');
+    setTimeout(() => window.location.href = "{{ url_for('professional.portal') }}", 2000);
+    return;
+  }
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  document.getElementById('timer-display').textContent = `${m}m ${s.toString().padStart(2,'0')}s restantes`;
+  if (diff < 120000) document.getElementById('access-timer').classList.add('timer-warning');
+}
+updateTimer();
+setInterval(updateTimer, 1000);
+</script>
+{% endblock %}
+{% endblock %}

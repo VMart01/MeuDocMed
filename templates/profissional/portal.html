@@ -1,0 +1,97 @@
+{% extends "profissional_base.html" %}
+{% block title %}Portal Profissional | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-magnifying-glass"></i> Buscar Pacientes</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="search-hero">
+  <form method="get" class="search-form">
+    <div class="search-box">
+      <i class="fa fa-magnifying-glass"></i>
+      <input type="text" name="search" value="{{ search }}"
+             placeholder="Buscar por nome, CPF ou número do Cartão SUS..."
+             autofocus>
+      <button type="submit" class="btn btn-primary">Buscar</button>
+    </div>
+  </form>
+</div>
+
+{% if search %}
+  {% if patients %}
+    <div class="results-header">
+      <span>{{ patients|length }} resultado(s) para "{{ search }}"</span>
+    </div>
+    <div class="patient-search-list">
+      {% for patient in patients %}
+        <div class="patient-search-card">
+          <div class="patient-avatar">
+            {{ patient.name[0].upper() }}
+          </div>
+          <div class="patient-info">
+            <h3>{{ patient.name }}</h3>
+            <div class="patient-meta">
+              <span><i class="fa fa-id-card"></i> {{ patient.cpf_formatted }}</span>
+              {% if patient.sus_card %}
+                <span><i class="fa fa-id-badge"></i> SUS: {{ patient.sus_card }}</span>
+              {% endif %}
+              {% if patient.birth_date %}
+                <span><i class="fa fa-calendar"></i> {{ patient.birth_date.strftime('%d/%m/%Y') }}</span>
+              {% endif %}
+            </div>
+          </div>
+          <div class="patient-access-status">
+            {% if patient._access_status == 'active' %}
+              <div>
+                <span class="badge badge-active"><i class="fa fa-circle-check"></i> Acesso Ativo</span>
+                <div class="access-expires">
+                  Expira: {{ patient._access_expires.strftime('%d/%m/%Y %H:%M') }}
+                </div>
+              </div>
+              <a href="{{ url_for('professional.prontuario', patient_id=patient.id) }}"
+                 class="btn btn-primary">
+                <i class="fa fa-folder-open"></i> Ver Prontuário
+              </a>
+            {% elif patient._access_status == 'pending' %}
+              <span class="badge badge-warning"><i class="fa fa-clock"></i> Aguardando Aprovação</span>
+              <a href="{{ url_for('professional.solicitar_acesso', patient_id=patient.id) }}"
+                 class="btn btn-outline">
+                <i class="fa fa-eye"></i> Ver Status
+              </a>
+            {% else %}
+              <span class="badge badge-gray">Sem Acesso</span>
+              <a href="{{ url_for('professional.solicitar_acesso', patient_id=patient.id) }}"
+                 class="btn btn-outline">
+                <i class="fa fa-key"></i> Solicitar Acesso
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <i class="fa fa-user-slash"></i>
+      <h2>Nenhum paciente encontrado</h2>
+      <p>Tente buscar pelo nome completo, CPF ou número do Cartão SUS.</p>
+    </div>
+  {% endif %}
+{% else %}
+  <div class="portal-empty">
+    <i class="fa fa-magnifying-glass fa-3x"></i>
+    <h2>Busque um paciente</h2>
+    <p>Digite o nome, CPF ou número do Cartão SUS do paciente acima.</p>
+  </div>
+{% endif %}
+{% endblock %}

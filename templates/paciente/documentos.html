@@ -1,0 +1,157 @@
+{% extends "paciente_base.html" %}
+{% block title %}Documentos | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-folder-open"></i> Meus Documentos</h1>
+  <a href="{{ url_for('patient.upload_documento') }}" class="btn btn-primary">
+    <i class="fa fa-cloud-arrow-up"></i> Enviar Documento
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Filtros -->
+<div class="filter-bar">
+  <form method="get" class="filter-form" id="filter-form">
+    <div class="filter-tabs">
+      <a href="{{ url_for('patient.documentos') }}"
+         class="filter-tab {% if not selected_category %}active{% endif %}">Todos</a>
+      {% for cat_key, cat_label in categories %}
+        <a href="{{ url_for('patient.documentos', category=cat_key, search=search, order=order) }}"
+           class="filter-tab {% if selected_category == cat_key %}active{% endif %}">{{ cat_label }}</a>
+      {% endfor %}
+    </div>
+    <div class="filter-controls">
+      <input type="hidden" name="category" value="{{ selected_category }}">
+      <input type="text" name="search" value="{{ search }}"
+             placeholder="Buscar por nome..." class="search-input"
+             onchange="this.form.submit()">
+      <select name="order" class="sort-select" onchange="this.form.submit()">
+        <option value="recent" {% if order == 'recent' %}selected{% endif %}>Mais recente</option>
+        <option value="oldest" {% if order == 'oldest' %}selected{% endif %}>Mais antigo</option>
+        <option value="alpha" {% if order == 'alpha' %}selected{% endif %}>A-Z</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if docs %}
+  <div class="doc-grid">
+    {% for doc in docs %}
+      <div class="doc-card">
+        <div class="doc-card-icon">
+          {% if doc.extension == 'pdf' %}
+            <i class="fa fa-file-pdf"></i>
+          {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}
+            <i class="fa fa-file-image"></i>
+          {% elif doc.extension in ['doc','docx'] %}
+            <i class="fa fa-file-word"></i>
+          {% elif doc.extension in ['xls','xlsx'] %}
+            <i class="fa fa-file-excel"></i>
+          {% elif doc.extension == 'zip' %}
+            <i class="fa fa-file-zipper"></i>
+          {% else %}
+            <i class="fa fa-file-lines"></i>
+          {% endif %}
+        </div>
+        <div class="doc-card-body">
+          <h3 class="doc-card-name" title="{{ doc.name }}">{{ doc.name }}</h3>
+          <div class="doc-card-meta">
+            <span class="badge badge-cat">{{ doc.category_display }}</span>
+            <span class="doc-size">{{ doc.file_size_display }}</span>
+          </div>
+          <div class="doc-card-date">
+            <i class="fa fa-calendar"></i>
+            {{ doc.created_at.strftime('%d/%m/%Y') }}
+            {% if doc.uploaded_by_professional_id %}
+              <span class="badge badge-prof" title="Enviado por {{ doc.uploader_professional.name }}">
+                <i class="fa fa-stethoscope"></i> Profissional
+              </span>
+            {% endif %}
+          </div>
+          {% if doc.observation %}
+            <p class="doc-observation">{{ doc.observation }}</p>
+          {% endif %}
+        </div>
+        <div class="doc-card-actions">
+          <a href="{{ url_for('patient.visualizar_documento', doc_id=doc.id) }}"
+             target="_blank" class="btn btn-sm btn-outline" title="Visualizar">
+            <i class="fa fa-eye"></i>
+          </a>
+          <a href="{{ url_for('patient.download_documento', doc_id=doc.id) }}"
+             class="btn btn-sm btn-outline" title="Download">
+            <i class="fa fa-download"></i>
+          </a>
+          <a href="{{ url_for('patient.editar_documento', doc_id=doc.id) }}"
+             class="btn btn-sm btn-outline" title="Editar">
+            <i class="fa fa-pen"></i>
+          </a>
+          <button class="btn btn-sm btn-danger-outline"
+                  onclick="confirmDelete('{{ url_for('patient.excluir_documento', doc_id=doc.id) }}', '{{ doc.name }}')"
+                  title="Excluir">
+            <i class="fa fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <i class="fa fa-folder-open"></i>
+    <h2>Nenhum documento encontrado</h2>
+    {% if search or selected_category %}
+      <p>Tente ajustar os filtros de busca.</p>
+      <a href="{{ url_for('patient.documentos') }}" class="btn btn-outline">Limpar filtros</a>
+    {% else %}
+      <p>Você ainda não enviou nenhum documento.</p>
+      <a href="{{ url_for('patient.upload_documento') }}" class="btn btn-primary">
+        <i class="fa fa-cloud-arrow-up"></i> Enviar primeiro documento
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<!-- Modal de confirmação de exclusão -->
+<div class="modal-overlay" id="delete-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-icon danger"><i class="fa fa-triangle-exclamation"></i></div>
+    <h3>Confirmar Exclusão</h3>
+    <p>Tem certeza que deseja excluir o documento <strong id="delete-doc-name"></strong>?
+       Esta ação é irreversível e o arquivo será removido permanentemente.</p>
+    <div class="modal-actions">
+      <button onclick="closeModal()" class="btn btn-outline">Cancelar</button>
+      <form id="delete-form" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">
+          <i class="fa fa-trash"></i> Excluir
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+function confirmDelete(url, name) {
+  document.getElementById('delete-doc-name').textContent = name;
+  document.getElementById('delete-form').action = url;
+  document.getElementById('delete-modal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('delete-modal').style.display = 'none';
+}
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}
+{% endblock %}

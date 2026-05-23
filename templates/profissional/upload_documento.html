@@ -1,0 +1,126 @@
+{% extends "profissional_base.html" %}
+{% block title %}Adicionar Documento | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-cloud-arrow-up"></i> Adicionar Documento ao Prontuário</h1>
+  <a href="{{ url_for('professional.prontuario', patient_id=patient.id) }}" class="btn btn-outline">
+    <i class="fa fa-arrow-left"></i> Voltar ao Prontuário
+  </a>
+</div>
+
+<div class="patient-profile-card">
+  <div class="patient-avatar-lg">{{ patient.name[0].upper() }}</div>
+  <div>
+    <h2>{{ patient.name }}</h2>
+    <span><i class="fa fa-id-card"></i> {{ patient.cpf_formatted }}</span>
+  </div>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="form-card">
+  <form method="post" enctype="multipart/form-data" id="upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="file-input" name="file"
+             accept=".pdf,.png,.jpg,.jpeg,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.txt,.zip"
+             style="display:none">
+      <div class="dropzone-content" id="dropzone-content">
+        <i class="fa fa-cloud-arrow-up fa-3x"></i>
+        <p><strong>Arraste o arquivo aqui</strong> ou
+           <button type="button" class="btn-link" onclick="document.getElementById('file-input').click()">selecione</button></p>
+        <small>PDF, imagens, Word, Excel, TXT, ZIP — máximo 16 MB</small>
+      </div>
+      <div class="dropzone-preview" id="file-preview" style="display:none">
+        <i class="fa fa-file-circle-check fa-2x" style="color:#1565c0"></i>
+        <div>
+          <strong id="preview-name"></strong>
+          <span id="preview-size"></span>
+        </div>
+        <button type="button" class="btn-link text-danger" onclick="clearFile()">
+          <i class="fa fa-xmark"></i> Remover
+        </button>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group form-group-flex">
+        <label>Nome do Documento *</label>
+        <input type="text" name="name" required placeholder="Ex: Laudo radiológico — 22/05/2025">
+      </div>
+      <div class="form-group form-group-flex">
+        <label>Categoria *</label>
+        <select name="category" required>
+          <option value="">Selecione...</option>
+          {% for cat_key, cat_label in categories %}
+            <option value="{{ cat_key }}">{{ cat_label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Observações</label>
+      <textarea name="observation" rows="3" placeholder="Notas clínicas, contexto do documento..."></textarea>
+    </div>
+
+    <div class="form-actions">
+      <a href="{{ url_for('professional.prontuario', patient_id=patient.id) }}" class="btn btn-outline">Cancelar</a>
+      <button type="submit" class="btn btn-primary" id="submit-btn">
+        <i class="fa fa-cloud-arrow-up"></i> Enviar ao Prontuário
+      </button>
+    </div>
+  </form>
+</div>
+
+{% block extra_scripts %}
+<script>
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+const dropContent = document.getElementById('dropzone-content');
+const filePreview = document.getElementById('file-preview');
+const MAX_SIZE = 16 * 1024 * 1024;
+
+function formatBytes(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+function showFile(file) {
+  if (file.size > MAX_SIZE) { alert('Arquivo excede 16 MB.'); return false; }
+  document.getElementById('preview-name').textContent = file.name;
+  document.getElementById('preview-size').textContent = formatBytes(file.size);
+  dropContent.style.display = 'none';
+  filePreview.style.display = 'flex';
+  return true;
+}
+function clearFile() {
+  fileInput.value = '';
+  dropContent.style.display = 'flex';
+  filePreview.style.display = 'none';
+}
+fileInput.addEventListener('change', function() { if (this.files[0]) showFile(this.files[0]); });
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && showFile(file)) {
+    const dt = new DataTransfer(); dt.items.add(file); fileInput.files = dt.files;
+  }
+});
+document.getElementById('upload-form').addEventListener('submit', function() {
+  document.getElementById('submit-btn').innerHTML = '<i class="fa fa-spinner fa-spin"></i> Enviando...';
+  document.getElementById('submit-btn').disabled = true;
+});
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,149 @@
+{% extends "profissional_base.html" %}
+{% block title %}Meu Perfil | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-user-gear"></i> Meu Perfil</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="profile-grid">
+  <!-- Dados do Perfil -->
+  <div class="form-card">
+    <h2 class="card-title"><i class="fa fa-address-card"></i> Dados Profissionais</h2>
+
+    <div class="prof-info-box">
+      <div class="prof-info-item">
+        <span class="prof-info-label">Tipo</span>
+        <span class="prof-info-value">{{ professional.prof_type_display }}</span>
+      </div>
+      <div class="prof-info-item">
+        <span class="prof-info-label">{{ professional.council_label }}</span>
+        <span class="prof-info-value"><code>{{ professional.registration }}</code></span>
+      </div>
+      <div class="prof-info-item">
+        <span class="prof-info-label">CPF</span>
+        <span class="prof-info-value">{{ professional.cpf[:3] }}.{{ professional.cpf[3:6] }}.{{ professional.cpf[6:9] }}-{{ professional.cpf[9:] }}</span>
+      </div>
+    </div>
+    <small class="form-hint" style="display:block;margin-bottom:1.25rem">
+      Registro e CPF não podem ser alterados. Entre em contato com o suporte se necessário.
+    </small>
+
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_profile">
+
+      <div class="form-group">
+        <label for="name">Nome Completo *</label>
+        <input type="text" id="name" name="name" required value="{{ professional.name }}">
+      </div>
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="specialty">Especialidade</label>
+          <input type="text" id="specialty" name="specialty"
+                 value="{{ professional.specialty or '' }}"
+                 placeholder="Ex: Clínica Geral, Cardiologia...">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="email">E-mail *</label>
+          <input type="email" id="email" name="email" required value="{{ professional.email }}">
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        <i class="fa fa-check"></i> Salvar Alterações
+      </button>
+    </form>
+  </div>
+
+  <div class="profile-side">
+    <!-- Alterar Senha -->
+    <div class="form-card">
+      <h2 class="card-title"><i class="fa fa-key"></i> Alterar Senha</h2>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="change_password">
+
+        <div class="form-group">
+          <label>Senha Atual</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="current_password" required placeholder="Sua senha atual">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nova Senha <small>(mínimo 6 caracteres)</small></label>
+          <div class="input-icon-toggle">
+            <input type="password" name="new_password" required minlength="6" placeholder="Nova senha">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Confirmar Nova Senha</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="new_password2" required minlength="6" placeholder="Repita a senha">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-outline">
+          <i class="fa fa-key"></i> Alterar Senha
+        </button>
+      </form>
+    </div>
+
+    <!-- Excluir Conta -->
+    <div class="form-card danger-zone">
+      <h2 class="card-title text-danger"><i class="fa fa-triangle-exclamation"></i> Zona de Perigo</h2>
+      <p class="text-sm text-muted">
+        Excluir sua conta é <strong>irreversível</strong>. Seu cadastro será removido permanentemente.
+        Os documentos enviados por você ao prontuário de pacientes não serão apagados.
+      </p>
+      <button class="btn btn-danger-outline"
+              onclick="document.getElementById('delete-modal').style.display='flex'">
+        <i class="fa fa-trash"></i> Excluir Minha Conta
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Excluir Conta -->
+<div class="modal-overlay" id="delete-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-icon danger"><i class="fa fa-triangle-exclamation"></i></div>
+    <h3>Excluir Conta Permanentemente</h3>
+    <p>Para confirmar, digite sua senha abaixo.</p>
+    <form method="post" action="{{ url_for('professional.excluir_conta') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group" style="padding: 0 1.5rem">
+        <input type="password" name="password" required placeholder="Sua senha" autocomplete="current-password">
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="document.getElementById('delete-modal').style.display='none'"
+                class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-danger">
+          <i class="fa fa-trash"></i> Excluir Permanentemente
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
+{% endblock %}
+{% endblock %}

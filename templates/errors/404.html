@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Página não encontrada | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card" style="text-align:center">
+    <div style="font-size:5rem;font-weight:700;color:#1565c0;line-height:1">404</div>
+    <h1>Página não encontrada</h1>
+    <p style="color:#555;margin:1rem 0">A página que você procura não existe ou foi removida.</p>
+    <a href="{{ url_for('auth.index') }}" class="btn btn-primary"><i class="fa fa-house"></i> Voltar ao início</a>
+  </div>
+</div>
+{% endblock %}

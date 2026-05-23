@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}MeuDocMed — Seu Prontuário Digital{% endblock %}
+{% block body_class %}landing{% endblock %}
+
+{% block content %}
+<div class="landing-page">
+  <header class="landing-header">
+    <div class="landing-logo">
+      <i class="fa fa-file-medical"></i>
+      <span>MeuDocMed</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-content">
+      <h1>Seus documentos médicos, <span class="highlight">sempre com você.</span></h1>
+      <p>
+        Guarde exames, laudos, receitas e vacinas em um cofre digital seguro.
+        Compartilhe com seu médico quando e onde precisar.
+      </p>
+      <div class="hero-actions">
+        <a href="{{ url_for('auth.cadastro_paciente') }}" class="btn btn-primary btn-lg">
+          <i class="fa fa-user-plus"></i> Criar Conta
+        </a>
+        <a href="{{ url_for('auth.login_paciente') }}" class="btn btn-outline btn-lg">
+          <i class="fa fa-right-to-bracket"></i> Entrar como Paciente
+        </a>
+      </div>
+    </div>
+    <div class="hero-image">
+      <div class="hero-card">
+        <div class="hero-card-icon"><i class="fa fa-shield-halved"></i></div>
+        <div class="hero-card-text">
+          <strong>100% Seguro</strong>
+          <span>Seus dados protegidos com criptografia</span>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-icon" style="background:#e8f5e9;color:#388e3c"><i class="fa fa-mobile-screen"></i></div>
+        <div class="hero-card-text">
+          <strong>Acesse de qualquer lugar</strong>
+          <span>Funciona em qualquer navegador</span>
+        </div>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-icon" style="background:#fff3e0;color:#e65100"><i class="fa fa-share-nodes"></i></div>
+        <div class="hero-card-text">
+          <strong>Compartilhamento controlado</strong>
+          <span>Você decide quem pode ver e por quanto tempo</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <h2>Tudo que você precisa em um só lugar</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <i class="fa fa-folder-open"></i>
+        <h3>Organize seus documentos</h3>
+        <p>Exames, laudos, receitas, vacinas — tudo categorizado e fácil de encontrar.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-pills"></i>
+        <h3>Histórico de Medicamentos</h3>
+        <p>Registre todos os medicamentos que usa, com dose, frequência e quem prescreveu.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-user-doctor"></i>
+        <h3>Acesso para Profissionais</h3>
+        <p>Aprove o acesso do seu médico com um clique. Defina o tempo e as permissões.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-link"></i>
+        <h3>Links Temporários</h3>
+        <p>Gere um link com prazo para compartilhar seu prontuário com qualquer pessoa.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-clock-rotate-left"></i>
+        <h3>Histórico Completo</h3>
+        <p>Saiba exatamente quem acessou sua conta, quando e o que foi feito.</p>
+      </div>
+      <div class="feature-card">
+        <i class="fa fa-file-pdf"></i>
+        <h3>Exportar em PDF</h3>
+        <p>Exporte seu histórico de acessos em PDF para arquivamento ou auditoria.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-prof">
+    <div class="cta-content">
+      <i class="fa fa-stethoscope"></i>
+      <div>
+        <h3>Você é profissional de saúde?</h3>
+        <p>Acesse o prontuário de seus pacientes de forma rápida e segura.</p>
+      </div>
+      <div class="cta-links">
+        <a href="{{ url_for('auth.login_profissional') }}" class="btn btn-white">
+          <i class="fa fa-right-to-bracket"></i> Entrar
+        </a>
+        <a href="{{ url_for('auth.cadastro_profissional') }}" class="btn btn-outline-white">
+          <i class="fa fa-user-plus"></i> Cadastrar
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    <p>&copy; {{ 2024 }} MeuDocMed — Todos os direitos reservados.</p>
+  </footer>
+</div>
+{% endblock %}

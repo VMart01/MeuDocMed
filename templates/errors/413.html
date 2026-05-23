@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Arquivo muito grande | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card" style="text-align:center">
+    <div style="font-size:4rem;color:#ff6f00;margin-bottom:1rem"><i class="fa fa-file-circle-exclamation"></i></div>
+    <h1>Arquivo Muito Grande</h1>
+    <p style="color:#555;margin:1rem 0">O arquivo enviado excede o limite de <strong>16 MB</strong>.</p>
+    <a href="javascript:history.back()" class="btn btn-primary"><i class="fa fa-arrow-left"></i> Voltar</a>
+  </div>
+</div>
+{% endblock %}

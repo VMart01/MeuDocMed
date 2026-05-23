@@ -1,0 +1,71 @@
+<div class="med-card {% if not med.is_active %}med-card-inactive{% endif %}">
+  <div class="med-card-header">
+    <div class="med-icon">
+      <i class="fa fa-capsules"></i>
+    </div>
+    <div class="med-info">
+      <h3>{{ med.name }}</h3>
+      {% if med.dose %}<span class="med-dose">{{ med.dose }}</span>{% endif %}
+    </div>
+    {% if med.is_active %}
+      <span class="badge badge-active">Ativo</span>
+    {% else %}
+      <span class="badge badge-gray">Inativo</span>
+    {% endif %}
+  </div>
+  <div class="med-details">
+    {% if med.frequency %}
+      <div class="med-detail"><i class="fa fa-rotate"></i> {{ med.frequency }}</div>
+    {% endif %}
+    {% if med.route %}
+      <div class="med-detail"><i class="fa fa-syringe"></i> {{ med.route_display }}</div>
+    {% endif %}
+    {% if med.start_date %}
+      <div class="med-detail">
+        <i class="fa fa-calendar-day"></i>
+        {{ med.start_date.strftime('%d/%m/%Y') }}
+        {% if med.end_date %} → {{ med.end_date.strftime('%d/%m/%Y') }}{% endif %}
+      </div>
+    {% endif %}
+    {% if med.prescriber %}
+      <div class="med-detail"><i class="fa fa-user-doctor"></i> {{ med.prescriber }}</div>
+    {% endif %}
+    {% if med.notes %}
+      <div class="med-detail med-notes"><i class="fa fa-note-sticky"></i> {{ med.notes }}</div>
+    {% endif %}
+  </div>
+  <div class="med-card-actions">
+    <button class="btn btn-sm btn-outline"
+            onclick="editMed(
+              {{ med.id }},
+              '{{ med.name|replace("'", "\\'")|e }}',
+              '{{ med.dose or '' }}',
+              '{{ med.frequency or '' }}',
+              '{{ med.route or '' }}',
+              '{{ med.start_date.strftime('%Y-%m-%d') if med.start_date else '' }}',
+              '{{ med.end_date.strftime('%Y-%m-%d') if med.end_date else '' }}',
+              '{{ med.prescriber|replace("'", "\\'")|e if med.prescriber else '' }}',
+              '{{ med.notes|replace("'", "\\'")|e if med.notes else '' }}'
+            )">
+      <i class="fa fa-pen"></i> Editar
+    </button>
+    <form method="post" action="{{ url_for('patient.toggle_medicamento', med_id=med.id) }}" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-outline">
+        {% if med.is_active %}
+          <i class="fa fa-toggle-off"></i> Inativar
+        {% else %}
+          <i class="fa fa-toggle-on"></i> Reativar
+        {% endif %}
+      </button>
+    </form>
+    <form method="post" action="{{ url_for('patient.excluir_medicamento', med_id=med.id) }}"
+          style="display:inline"
+          onsubmit="return confirm('Excluir medicamento {{ med.name }}?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-danger-outline">
+        <i class="fa fa-trash"></i>
+      </button>
+    </form>
+  </div>
+</div>

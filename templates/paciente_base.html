@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block body_class %}app-layout{% endblock %}
+
+{% block navbar %}
+<nav class="top-nav">
+  <div class="top-nav-left">
+    <button class="sidebar-toggle" onclick="toggleSidebar()">
+      <i class="fa fa-bars"></i>
+    </button>
+    <a href="{{ url_for('patient.dashboard') }}" class="nav-brand">
+      <i class="fa fa-file-medical"></i>
+      <span>MeuDocMed</span>
+    </a>
+  </div>
+  <div class="top-nav-right">
+    <!-- Sino de notificações -->
+    <div class="notification-bell" id="notif-bell" title="Notificações">
+      <i class="fa fa-bell"></i>
+      <span class="notif-badge" id="notif-badge" style="display:none">0</span>
+    </div>
+    <div class="nav-user">
+      <i class="fa fa-circle-user"></i>
+      <span>{{ patient.name.split()[0] }}</span>
+    </div>
+    <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn-logout" title="Sair">
+        <i class="fa fa-right-from-bracket"></i>
+      </button>
+    </form>
+  </div>
+</nav>
+{% endblock %}
+
+{% block sidebar %}
+<aside class="sidebar" id="sidebar">
+  <nav class="sidebar-nav">
+    <a href="{{ url_for('patient.dashboard') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.dashboard' %}active{% endif %}">
+      <i class="fa fa-house"></i><span>Painel</span>
+    </a>
+    <a href="{{ url_for('patient.documentos') }}"
+       class="sidebar-link {% if 'document' in request.endpoint %}active{% endif %}">
+      <i class="fa fa-folder-open"></i><span>Documentos</span>
+    </a>
+    <a href="{{ url_for('patient.upload_documento') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.upload_documento' %}active{% endif %}">
+      <i class="fa fa-cloud-arrow-up"></i><span>Enviar Arquivo</span>
+    </a>
+    <a href="{{ url_for('patient.medicamentos') }}"
+       class="sidebar-link {% if 'medicamento' in request.endpoint %}active{% endif %}">
+      <i class="fa fa-pills"></i><span>Medicamentos</span>
+    </a>
+    <div class="sidebar-divider"></div>
+    <a href="{{ url_for('patient.acessos') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.acessos' %}active{% endif %}">
+      <i class="fa fa-user-shield"></i><span>Acessos</span>
+      {% set pending_count = pending_requests_count if pending_requests_count is defined else 0 %}
+      {% if pending_count > 0 %}
+        <span class="sidebar-badge">{{ pending_count }}</span>
+      {% endif %}
+    </a>
+    <a href="{{ url_for('patient.links') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.links' %}active{% endif %}">
+      <i class="fa fa-link"></i><span>Links</span>
+    </a>
+    <a href="{{ url_for('patient.historico') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.historico' %}active{% endif %}">
+      <i class="fa fa-clock-rotate-left"></i><span>Histórico</span>
+    </a>
+    <div class="sidebar-divider"></div>
+    <a href="{{ url_for('patient.perfil') }}"
+       class="sidebar-link {% if request.endpoint == 'patient.perfil' %}active{% endif %}">
+      <i class="fa fa-user-gear"></i><span>Perfil</span>
+    </a>
+  </nav>
+</aside>
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// SSE — notificações em tempo real
+(function() {
+  const bell = document.getElementById('notif-bell');
+  const badge = document.getElementById('notif-badge');
+  let count = 0;
+
+  function showNotification(data) {
+    count++;
+    badge.textContent = count;
+    badge.style.display = 'flex';
+    bell.classList.add('bell-ring');
+    setTimeout(() => bell.classList.remove('bell-ring'), 1000);
+
+    // Toast de notificação
+    const toast = document.createElement('div');
+    toast.className = 'notif-toast';
+    toast.innerHTML = `
+      <i class="fa fa-user-doctor"></i>
+      <div>
+        <strong>${data.professional_name}</strong>
+        <span>${data.professional_type} (${data.professional_reg}) solicitou acesso ao seu prontuário.</span>
+      </div>
+      <a href="/paciente/acessos" class="btn btn-sm btn-primary">Ver</a>
+    `;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.classList.add('show'), 50);
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 400);
+    }, 8000);
+  }
+
+  if (typeof EventSource !== 'undefined') {
+    const es = new EventSource('/paciente/notificacoes/stream');
+    es.onmessage = function(e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'access_request') {
+          showNotification(data);
+        }
+      } catch(err) {}
+    };
+    es.onerror = function() {
+      // Reconecta automaticamente em 5s
+      setTimeout(() => { es.close(); }, 5000);
+    };
+  }
+
+  // Reseta badge ao clicar no sino
+  bell.addEventListener('click', function() {
+    count = 0;
+    badge.style.display = 'none';
+    window.location.href = '/paciente/acessos';
+  });
+})();
+</script>
+{% endblock %}

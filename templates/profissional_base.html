@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block body_class %}app-layout{% endblock %}
+
+{% block navbar %}
+<nav class="top-nav">
+  <div class="top-nav-left">
+    <a href="{{ url_for('professional.portal') }}" class="nav-brand">
+      <i class="fa fa-file-medical"></i>
+      <span>MeuDocMed</span>
+      <span class="nav-role-badge">Profissional</span>
+    </a>
+  </div>
+  <div class="top-nav-right">
+    <div class="nav-user">
+      <i class="fa fa-stethoscope"></i>
+      <span>{{ professional.name.split()[0] }}</span>
+      <small>{{ professional.prof_type_display }}</small>
+    </div>
+    <form action="{{ url_for('auth.logout') }}" method="post" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn-logout" title="Sair">
+        <i class="fa fa-right-from-bracket"></i>
+      </button>
+    </form>
+  </div>
+</nav>
+{% endblock %}
+
+{% block sidebar %}
+<aside class="sidebar" id="sidebar">
+  <nav class="sidebar-nav">
+    <a href="{{ url_for('professional.portal') }}"
+       class="sidebar-link {% if request.endpoint == 'professional.portal' %}active{% endif %}">
+      <i class="fa fa-magnifying-glass"></i><span>Buscar Pacientes</span>
+    </a>
+    <div class="sidebar-divider"></div>
+    <a href="{{ url_for('professional.perfil') }}"
+       class="sidebar-link {% if request.endpoint == 'professional.perfil' %}active{% endif %}">
+      <i class="fa fa-user-gear"></i><span>Perfil</span>
+    </a>
+  </nav>
+  <div class="sidebar-profile">
+    <div class="sidebar-prof-name">{{ professional.name }}</div>
+    <div class="sidebar-prof-reg">{{ professional.registration }}</div>
+    {% if professional.specialty %}
+      <div class="sidebar-prof-spec">{{ professional.specialty }}</div>
+    {% endif %}
+  </div>
+</aside>
+{% endblock %}

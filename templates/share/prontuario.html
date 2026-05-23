@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Prontuário de {{ patient.name }} | MeuDocMed{% endblock %}
+{% block body_class %}share-page{% endblock %}
+
+{% block navbar %}
+<nav class="top-nav top-nav-share">
+  <div class="top-nav-left">
+    <a href="/" class="nav-brand">
+      <i class="fa fa-file-medical"></i>
+      <span>MeuDocMed</span>
+    </a>
+    <span class="share-badge"><i class="fa fa-link"></i> Acesso por Link Temporário</span>
+  </div>
+  <div class="top-nav-right">
+    <div class="share-expiry">
+      <i class="fa fa-clock"></i> Expira: {{ link.expires_at.strftime('%d/%m/%Y %H:%M') }}
+    </div>
+  </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="share-container">
+  <div class="share-header">
+    <div class="patient-avatar-lg">{{ patient.name[0].upper() }}</div>
+    <div>
+      <h1>{{ patient.name }}</h1>
+      <div class="patient-meta">
+        <span><i class="fa fa-id-card"></i> {{ patient.cpf_formatted }}</span>
+        {% if patient.birth_date %}
+          <span><i class="fa fa-calendar"></i> {{ patient.birth_date.strftime('%d/%m/%Y') }}</span>
+        {% endif %}
+      </div>
+      {% if link.description %}
+        <div class="share-desc"><i class="fa fa-note-sticky"></i> {{ link.description }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if patient.clinical_notes %}
+    <div class="clinical-notes-box">
+      <h3><i class="fa fa-note-sticky"></i> Observações Clínicas</h3>
+      <p>{{ patient.clinical_notes }}</p>
+    </div>
+  {% endif %}
+
+  {% if meds_ativos %}
+    <div class="meds-summary">
+      <h3><i class="fa fa-pills"></i> Medicamentos Ativos</h3>
+      <div class="meds-chips">
+        {% for med in meds_ativos %}
+          <span class="med-chip">
+            <strong>{{ med.name }}</strong>
+            {% if med.dose %} {{ med.dose }}{% endif %}
+            {% if med.frequency %} · {{ med.frequency }}{% endif %}
+            {% if med.route %} · {{ med.route_display }}{% endif %}
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+
+  <!-- Filtros e Documentos -->
+  <div class="filter-bar">
+    <form method="get" class="filter-form">
+      <div class="filter-tabs">
+        <a href="?token={{ token }}" class="filter-tab {% if not selected_category %}active{% endif %}">Todos</a>
+        {% for cat_key, cat_label in categories %}
+          <a href="?category={{ cat_key }}&search={{ search }}"
+             class="filter-tab {% if selected_category == cat_key %}active{% endif %}">{{ cat_label }}</a>
+        {% endfor %}
+      </div>
+      <div class="filter-controls">
+        <input type="hidden" name="category" value="{{ selected_category }}">
+        <input type="text" name="search" value="{{ search }}"
+               placeholder="Buscar documento..." class="search-input" onchange="this.form.submit()">
+      </div>
+    </form>
+  </div>
+
+  {% if docs %}
+    <div class="doc-grid">
+      {% for doc in docs %}
+        <div class="doc-card">
+          <div class="doc-card-icon">
+            {% if doc.extension == 'pdf' %}<i class="fa fa-file-pdf"></i>
+            {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}<i class="fa fa-file-image"></i>
+            {% elif doc.extension in ['doc','docx'] %}<i class="fa fa-file-word"></i>
+            {% elif doc.extension in ['xls','xlsx'] %}<i class="fa fa-file-excel"></i>
+            {% else %}<i class="fa fa-file-lines"></i>{% endif %}
+          </div>
+          <div class="doc-card-body">
+            <h3 class="doc-card-name">{{ doc.name }}</h3>
+            <div class="doc-card-meta">
+              <span class="badge badge-cat">{{ doc.category_display }}</span>
+              <span class="doc-size">{{ doc.file_size_display }}</span>
+            </div>
+            <div class="doc-card-date">
+              <i class="fa fa-calendar"></i> {{ doc.created_at.strftime('%d/%m/%Y') }}
+            </div>
+            {% if doc.observation %}<p class="doc-observation">{{ doc.observation }}</p>{% endif %}
+          </div>
+          <div class="doc-card-actions">
+            <a href="{{ url_for('share.visualizar_documento', token=token, doc_id=doc.id) }}"
+               target="_blank" class="btn btn-sm btn-outline">
+              <i class="fa fa-eye"></i> Visualizar
+            </a>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <i class="fa fa-folder-open"></i>
+      <h2>Nenhum documento encontrado</h2>
+    </div>
+  {% endif %}
+
+  <div class="share-footer">
+    <p><i class="fa fa-shield-halved"></i> Este acesso é temporário e controlado pelo paciente.</p>
+  </div>
+</div>
+{% endblock %}

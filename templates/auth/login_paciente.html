@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Login — Paciente | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <a href="{{ url_for('auth.index') }}" class="auth-brand">
+        <i class="fa fa-file-medical"></i> MeuDocMed
+      </a>
+      <h1>Entrar como Paciente</h1>
+      <p>Acesse seu prontuário digital</p>
+    </div>
+
+    {% include "partials/flash.html" ignore missing %}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label for="cpf">CPF</label>
+        <div class="input-icon">
+          <i class="fa fa-id-card"></i>
+          <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00"
+                 inputmode="numeric" autocomplete="username"
+                 maxlength="14" required>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Senha</label>
+        <div class="input-icon input-icon-toggle">
+          <i class="fa fa-lock"></i>
+          <input type="password" id="password" name="password"
+                 placeholder="Sua senha" autocomplete="current-password" required>
+          <button type="button" class="toggle-pw" tabindex="-1">
+            <i class="fa fa-eye"></i>
+          </button>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">
+        <i class="fa fa-right-to-bracket"></i> Entrar
+      </button>
+    </form>
+
+    <div class="auth-links">
+      <a href="{{ url_for('auth.recuperar_senha') }}">Esqueci minha senha</a>
+      <span>•</span>
+      <a href="{{ url_for('auth.cadastro_paciente') }}">Criar conta</a>
+    </div>
+
+    <div class="auth-separator">ou</div>
+
+    <a href="{{ url_for('auth.login_profissional') }}" class="btn btn-outline btn-full">
+      <i class="fa fa-stethoscope"></i> Entrar como Profissional
+    </a>
+  </div>
+</div>
+{% endblock %}

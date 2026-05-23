@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Recuperar Senha | MeuDocMed{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+  <div class="auth-card">
+    <div class="auth-header">
+      <a href="{{ url_for('auth.index') }}" class="auth-brand">
+        <i class="fa fa-file-medical"></i> MeuDocMed
+      </a>
+      <h1>Recuperar Senha</h1>
+      <p>Informe seu CPF e enviaremos um link de recuperação para seu e-mail.</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="post" class="auth-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <label for="cpf">CPF</label>
+        <div class="input-icon">
+          <i class="fa fa-id-card"></i>
+          <input type="text" id="cpf" name="cpf" placeholder="000.000.000-00"
+                 inputmode="numeric" maxlength="14" required>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">
+        <i class="fa fa-envelope"></i> Enviar Link de Recuperação
+      </button>
+    </form>
+
+    <div class="auth-links">
+      <a href="{{ url_for('auth.login_paciente') }}"><i class="fa fa-arrow-left"></i> Voltar ao login</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,130 @@
+{% extends "profissional_base.html" %}
+{% block title %}Solicitar Acesso | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-key"></i> Acesso ao Prontuário</h1>
+  <a href="{{ url_for('professional.portal') }}" class="btn btn-outline">
+    <i class="fa fa-arrow-left"></i> Voltar
+  </a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Informações do Paciente -->
+<div class="patient-profile-card">
+  <div class="patient-avatar-lg">{{ patient.name[0].upper() }}</div>
+  <div>
+    <h2>{{ patient.name }}</h2>
+    <div class="patient-meta">
+      <span><i class="fa fa-id-card"></i> {{ patient.cpf_formatted }}</span>
+      {% if patient.sus_card %}<span><i class="fa fa-id-badge"></i> SUS: {{ patient.sus_card }}</span>{% endif %}
+      {% if patient.birth_date %}<span><i class="fa fa-calendar"></i> {{ patient.birth_date.strftime('%d/%m/%Y') }}</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% if pending %}
+<div class="alert alert-info">
+  <i class="fa fa-clock"></i>
+  <strong>Solicitação enviada</strong> — Aguardando aprovação do paciente {{ patient.name }}.
+  A solicitação foi feita em {{ pending.requested_at.strftime('%d/%m/%Y às %H:%M') }}.
+</div>
+{% endif %}
+
+<!-- Métodos de Acesso -->
+<div class="access-methods">
+  <h2 class="section-title"><i class="fa fa-lock-open"></i> Solicitar Acesso</h2>
+
+  <div class="method-cards">
+    <!-- Método 1: Notificação -->
+    <div class="method-card">
+      <div class="method-icon"><i class="fa fa-bell"></i></div>
+      <div class="method-body">
+        <h3>Método 1 — Notificação ao Paciente</h3>
+        <p>
+          Envie uma solicitação de acesso. O paciente receberá uma notificação em tempo real
+          e poderá aprovar ou recusar pelo próprio celular/computador, definindo o tempo de acesso.
+        </p>
+        <p class="method-use-when">
+          <strong>Use quando:</strong> o paciente estiver aguardando você entrar em contato,
+          ou quando houver acesso remoto.
+        </p>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="method" value="notify">
+        <div class="form-group">
+          <label>Mensagem ao Paciente (opcional)</label>
+          <textarea name="message" rows="2" placeholder="Ex: Dr. João Silva — Clínica ABC — 22/05/2025"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary" {% if pending %}disabled{% endif %}>
+          <i class="fa fa-paper-plane"></i>
+          {% if pending %}Solicitação Enviada{% else %}Enviar Solicitação{% endif %}
+        </button>
+      </form>
+    </div>
+
+    <!-- Divisor -->
+    <div class="method-divider"><span>ou</span></div>
+
+    <!-- Método 2: Senha do Paciente -->
+    <div class="method-card">
+      <div class="method-icon"><i class="fa fa-keyboard"></i></div>
+      <div class="method-body">
+        <h3>Método 2 — Autorização por Senha</h3>
+        <p>
+          O paciente digita a própria senha no campo abaixo para autorizar o acesso
+          imediatamente, sem precisar abrir o celular.
+        </p>
+        <p class="method-use-when">
+          <strong>Use quando:</strong> o paciente estiver presente na consulta e
+          puder digitar a senha no seu dispositivo.
+        </p>
+      </div>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="method" value="password">
+        <div class="form-group">
+          <label>Peça ao paciente que digite a senha dele:</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="patient_password" required
+                   placeholder="Senha do paciente" autocomplete="off">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Tempo de Acesso</label>
+            <div class="duration-pills">
+              {% for d in durations %}
+                <label class="duration-pill">
+                  <input type="radio" name="minutes" value="{{ d }}" {% if d == 30 %}checked{% endif %}>
+                  <span>{{ d }} min</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="allow_download" value="1">
+            <span>Paciente autoriza download dos arquivos</span>
+          </label>
+        </div>
+        <button type="submit" class="btn btn-success">
+          <i class="fa fa-unlock"></i> Autorizar Acesso Agora
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

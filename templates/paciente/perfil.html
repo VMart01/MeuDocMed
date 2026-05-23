@@ -1,0 +1,153 @@
+{% extends "paciente_base.html" %}
+{% block title %}Meu Perfil | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-user-gear"></i> Meu Perfil</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="profile-grid">
+  <!-- Dados do Perfil -->
+  <div class="form-card">
+    <h2 class="card-title"><i class="fa fa-address-card"></i> Dados Pessoais</h2>
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="update_profile">
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="name">Nome Completo *</label>
+          <input type="text" id="name" name="name" required value="{{ patient.name }}">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="birth_date">Data de Nascimento *</label>
+          <input type="date" id="birth_date" name="birth_date" required
+                 value="{{ patient.birth_date.strftime('%Y-%m-%d') if patient.birth_date else '' }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="cpf">CPF *</label>
+          <input type="text" id="cpf" name="cpf" required
+                 value="{{ patient.cpf_formatted }}" maxlength="14" inputmode="numeric">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="sus_card">Cartão SUS</label>
+          <input type="text" id="sus_card" name="sus_card"
+                 value="{{ patient.sus_card or '' }}">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-group-flex">
+          <label for="phone">Telefone</label>
+          <input type="tel" id="phone" name="phone"
+                 value="{{ patient.phone or '' }}">
+        </div>
+        <div class="form-group form-group-flex">
+          <label for="email">E-mail *</label>
+          <input type="email" id="email" name="email" required
+                 value="{{ patient.email }}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="clinical_notes">Observações Clínicas</label>
+        <textarea id="clinical_notes" name="clinical_notes" rows="3">{{ patient.clinical_notes or '' }}</textarea>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        <i class="fa fa-check"></i> Salvar Alterações
+      </button>
+    </form>
+  </div>
+
+  <div class="profile-side">
+    <!-- Alterar Senha -->
+    <div class="form-card">
+      <h2 class="card-title"><i class="fa fa-key"></i> Alterar Senha</h2>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="change_password">
+
+        <div class="form-group">
+          <label>Senha Atual</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="current_password" required placeholder="Sua senha atual">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Nova Senha</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="new_password" required minlength="6" placeholder="Mínimo 6 caracteres">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Confirmar Nova Senha</label>
+          <div class="input-icon-toggle">
+            <input type="password" name="new_password2" required minlength="6" placeholder="Repita a nova senha">
+            <button type="button" class="toggle-pw" tabindex="-1"><i class="fa fa-eye"></i></button>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-outline">
+          <i class="fa fa-key"></i> Alterar Senha
+        </button>
+      </form>
+    </div>
+
+    <!-- Excluir Conta -->
+    <div class="form-card danger-zone">
+      <h2 class="card-title text-danger"><i class="fa fa-triangle-exclamation"></i> Zona de Perigo</h2>
+      <p class="text-sm text-muted">
+        Excluir sua conta é uma ação <strong>irreversível</strong>. Todos os seus
+        documentos, medicamentos e histórico serão apagados permanentemente.
+      </p>
+      <button class="btn btn-danger-outline"
+              onclick="document.getElementById('delete-modal').style.display='flex'">
+        <i class="fa fa-trash"></i> Excluir Minha Conta
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Excluir Conta -->
+<div class="modal-overlay" id="delete-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-icon danger"><i class="fa fa-triangle-exclamation"></i></div>
+    <h3>Excluir Conta Permanentemente</h3>
+    <p>Esta ação é irreversível. Para confirmar, digite sua senha abaixo.</p>
+    <form method="post" action="{{ url_for('patient.excluir_conta') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group">
+        <input type="password" name="password" required placeholder="Sua senha" autocomplete="current-password">
+      </div>
+      <div class="modal-actions">
+        <button type="button" onclick="document.getElementById('delete-modal').style.display='none'" class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-danger"><i class="fa fa-trash"></i> Excluir Permanentemente</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+document.getElementById('delete-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+</script>
+{% endblock %}
+{% endblock %}

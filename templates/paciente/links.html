@@ -1,0 +1,142 @@
+{% extends "paciente_base.html" %}
+{% block title %}Links de Compartilhamento | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-link"></i> Links de Compartilhamento</h1>
+  <button class="btn btn-primary" onclick="document.getElementById('create-modal').style.display='flex'">
+    <i class="fa fa-plus"></i> Novo Link
+  </button>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="info-box">
+  <i class="fa fa-circle-info"></i>
+  <p>Links temporários permitem que qualquer pessoa acesse seu prontuário durante o período definido, sem precisar fazer login. Você pode revogar um link a qualquer momento.</p>
+</div>
+
+{% if links %}
+  <div class="links-list">
+    {% for link in links %}
+      <div class="link-card {% if not link.is_valid %}link-card-inactive{% endif %}">
+        <div class="link-card-header">
+          <div class="link-status">
+            {% if link.is_revoked %}
+              <span class="badge badge-gray"><i class="fa fa-ban"></i> Revogado</span>
+            {% elif link.is_valid %}
+              <span class="badge badge-active"><i class="fa fa-circle-check"></i> Ativo</span>
+            {% else %}
+              <span class="badge badge-gray"><i class="fa fa-clock"></i> Expirado</span>
+            {% endif %}
+          </div>
+          <div class="link-desc">
+            {{ link.description or 'Sem descrição' }}
+          </div>
+        </div>
+
+        <div class="link-url-box" {% if not link.is_valid %}style="opacity:.5"{% endif %}>
+          <code id="link-{{ link.id }}">{{ request.host_url }}prontuario/{{ link.token }}</code>
+          {% if link.is_valid %}
+            <button class="btn btn-xs btn-outline" onclick="copyLink('link-{{ link.id }}')">
+              <i class="fa fa-copy"></i> Copiar
+            </button>
+          {% endif %}
+        </div>
+
+        <div class="link-meta">
+          <span><i class="fa fa-calendar"></i> Criado em {{ link.created_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          <span><i class="fa fa-hourglass"></i> Expira em {{ link.expires_at.strftime('%d/%m/%Y %H:%M') }}</span>
+          {% if link.last_accessed %}
+            <span><i class="fa fa-eye"></i> Último acesso: {{ link.last_accessed.strftime('%d/%m/%Y %H:%M') }}</span>
+          {% else %}
+            <span><i class="fa fa-eye-slash"></i> Nunca acessado</span>
+          {% endif %}
+        </div>
+
+        {% if link.is_valid %}
+          <div class="link-actions">
+            <form method="post" action="{{ url_for('patient.revogar_link', link_id=link.id) }}"
+                  onsubmit="return confirm('Revogar este link? Ele se tornará inválido imediatamente.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-danger-outline">
+                <i class="fa fa-ban"></i> Revogar
+              </button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty-state">
+    <i class="fa fa-link"></i>
+    <h2>Nenhum link criado</h2>
+    <p>Crie um link temporário para compartilhar seu prontuário com quem precisar.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('create-modal').style.display='flex'">
+      <i class="fa fa-plus"></i> Criar primeiro link
+    </button>
+  </div>
+{% endif %}
+
+<!-- Modal Criar Link -->
+<div class="modal-overlay" id="create-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa fa-link"></i> Criar Link de Compartilhamento</h3>
+      <button onclick="document.getElementById('create-modal').style.display='none'" class="modal-close">
+        <i class="fa fa-xmark"></i>
+      </button>
+    </div>
+    <form method="post" action="{{ url_for('patient.criar_link') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="form-group">
+          <label>Descrição</label>
+          <input type="text" name="description" placeholder="Ex: Consulta com Dr. Silva — 22/05/2025">
+          <small class="form-hint">Para lembrar com quem você compartilhou.</small>
+        </div>
+        <div class="form-group">
+          <label>Válido por (horas)</label>
+          <input type="number" name="hours" value="24" min="1" max="168">
+          <small class="form-hint">Entre 1 hora e 168 horas (7 dias).</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="document.getElementById('create-modal').style.display='none'" class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa fa-plus"></i> Criar Link</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+function copyLink(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Link copiado!', 'success');
+  });
+}
+document.getElementById('create-modal').addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
+function showToast(msg, type) {
+  const t = document.createElement('div');
+  t.className = `notif-toast notif-toast-${type}`;
+  t.innerHTML = `<i class="fa fa-check-circle"></i><span>${msg}</span>`;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 50);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 400); }, 2500);
+}
+</script>
+{% endblock %}
+{% endblock %}

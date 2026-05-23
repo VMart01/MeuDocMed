@@ -1,0 +1,205 @@
+{% extends "paciente_base.html" %}
+{% block title %}Medicamentos | MeuDocMed{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-pills"></i> Medicamentos</h1>
+  <button class="btn btn-primary" onclick="openModal('add-modal')">
+    <i class="fa fa-plus"></i> Adicionar
+  </button>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Ativos -->
+<section class="med-section">
+  <h2 class="section-title">
+    <span class="status-dot active"></span> Medicamentos Ativos
+    <span class="badge">{{ ativos|length }}</span>
+  </h2>
+  {% if ativos %}
+    <div class="med-grid">
+      {% for med in ativos %}
+        {% include "paciente/partials/med_card.html" %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state-sm">
+      <i class="fa fa-pills"></i>
+      <p>Nenhum medicamento ativo cadastrado.</p>
+    </div>
+  {% endif %}
+</section>
+
+<!-- Inativos -->
+{% if inativos %}
+<section class="med-section">
+  <h2 class="section-title">
+    <span class="status-dot inactive"></span> Histórico (Inativos)
+    <span class="badge badge-gray">{{ inativos|length }}</span>
+  </h2>
+  <div class="med-grid">
+    {% for med in inativos %}
+      {% include "paciente/partials/med_card.html" %}
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+<!-- Modal Adicionar -->
+<div class="modal-overlay" id="add-modal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3><i class="fa fa-pills"></i> Adicionar Medicamento</h3>
+      <button onclick="closeModal('add-modal')" class="modal-close"><i class="fa fa-xmark"></i></button>
+    </div>
+    <form method="post" action="{{ url_for('patient.adicionar_medicamento') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Nome do Medicamento *</label>
+            <input type="text" name="name" required placeholder="Ex: Losartana 50mg">
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Dose</label>
+            <input type="text" name="dose" placeholder="Ex: 1 comprimido">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Frequência</label>
+            <input type="text" name="frequency" placeholder="Ex: 1x ao dia">
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Via de Administração</label>
+            <select name="route">
+              <option value="">Selecione...</option>
+              {% for val, label in routes %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Data de Início</label>
+            <input type="date" name="start_date">
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Data de Fim</label>
+            <input type="date" name="end_date">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Prescrito por</label>
+          <input type="text" name="prescriber" placeholder="Nome do profissional">
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea name="notes" rows="2" placeholder="Instruções, efeitos adversos..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('add-modal')" class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar (preenchido via JS) -->
+<div class="modal-overlay" id="edit-modal" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3><i class="fa fa-pen"></i> Editar Medicamento</h3>
+      <button onclick="closeModal('edit-modal')" class="modal-close"><i class="fa fa-xmark"></i></button>
+    </div>
+    <form method="post" id="edit-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Nome *</label>
+            <input type="text" name="name" id="edit-name" required>
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Dose</label>
+            <input type="text" name="dose" id="edit-dose">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Frequência</label>
+            <input type="text" name="frequency" id="edit-frequency">
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Via</label>
+            <select name="route" id="edit-route">
+              <option value="">Selecione...</option>
+              {% for val, label in routes %}
+                <option value="{{ val }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group form-group-flex">
+            <label>Início</label>
+            <input type="date" name="start_date" id="edit-start">
+          </div>
+          <div class="form-group form-group-flex">
+            <label>Fim</label>
+            <input type="date" name="end_date" id="edit-end">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Prescrito por</label>
+          <input type="text" name="prescriber" id="edit-prescriber">
+        </div>
+        <div class="form-group">
+          <label>Observações</label>
+          <textarea name="notes" id="edit-notes" rows="2"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('edit-modal')" class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+document.querySelectorAll('.modal-overlay').forEach(m => {
+  m.addEventListener('click', e => { if (e.target === m) m.style.display = 'none'; });
+});
+
+function editMed(id, name, dose, frequency, route, start, end, prescriber, notes) {
+  const form = document.getElementById('edit-form');
+  form.action = `/paciente/medicamentos/${id}/editar`;
+  document.getElementById('edit-name').value = name;
+  document.getElementById('edit-dose').value = dose;
+  document.getElementById('edit-frequency').value = frequency;
+  document.getElementById('edit-route').value = route;
+  document.getElementById('edit-start').value = start;
+  document.getElementById('edit-end').value = end;
+  document.getElementById('edit-prescriber').value = prescriber;
+  document.getElementById('edit-notes').value = notes;
+  openModal('edit-modal');
+}
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,0 +1,183 @@
+{% extends "paciente_base.html" %}
+{% block title %}Painel | MeuDocMed{% endblock %}
+{% set pending_requests_count = pending_requests|length %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Olá, {{ patient.name.split()[0] }}!</h1>
+  <p>Bem-vindo ao seu prontuário digital.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-container">
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+          <i class="fa fa-circle-info"></i> {{ message }}
+          <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}
+
+<!-- Solicitações Pendentes -->
+{% if pending_requests %}
+<div class="alert alert-warning pending-requests-alert">
+  <i class="fa fa-user-clock fa-lg"></i>
+  <div>
+    <strong>{{ pending_requests|length }} solicitação(ões) de acesso pendente(s)</strong>
+    <div class="pending-list">
+      {% for req in pending_requests %}
+        <span class="pending-item">
+          <i class="fa fa-stethoscope"></i>
+          {{ req.professional.name }} ({{ req.professional.prof_type_display }} — {{ req.professional.registration }})
+        </span>
+      {% endfor %}
+    </div>
+  </div>
+  <a href="{{ url_for('patient.acessos') }}" class="btn btn-sm btn-warning">Gerenciar</a>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon"><i class="fa fa-folder-open"></i></div>
+    <div class="stat-body">
+      <span class="stat-number">{{ total_docs }}</span>
+      <span class="stat-label">Documentos</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#e8f5e9;color:#2e7d32"><i class="fa fa-pills"></i></div>
+    <div class="stat-body">
+      <span class="stat-number">{{ active_meds_count }}</span>
+      <span class="stat-label">Medicamentos Ativos</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#fff3e0;color:#e65100"><i class="fa fa-user-clock"></i></div>
+    <div class="stat-body">
+      <span class="stat-number">{{ pending_requests|length }}</span>
+      <span class="stat-label">Acessos Pendentes</span>
+    </div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon" style="background:#f3e5f5;color:#7b1fa2"><i class="fa fa-clock-rotate-left"></i></div>
+    <div class="stat-body">
+      <span class="stat-number">{{ recent_logs|length }}</span>
+      <span class="stat-label">Eventos Recentes</span>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard-grid">
+  <!-- Documentos por categoria -->
+  <div class="dash-card">
+    <div class="dash-card-header">
+      <h2><i class="fa fa-chart-pie"></i> Documentos por Categoria</h2>
+      <a href="{{ url_for('patient.documentos') }}" class="btn btn-sm btn-outline">Ver todos</a>
+    </div>
+    {% if cat_stats %}
+      <div class="category-chart">
+        {% for cat, count in cat_stats.items() %}
+          <div class="cat-bar">
+            <span class="cat-label">{{ cat }}</span>
+            <div class="cat-track">
+              <div class="cat-fill" style="width: {{ [(count / total_docs * 100)|int, 100]|min }}%"></div>
+            </div>
+            <span class="cat-count">{{ count }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state-sm">
+        <i class="fa fa-folder-open"></i>
+        <p>Nenhum documento ainda. <a href="{{ url_for('patient.upload_documento') }}">Enviar agora</a></p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Últimos documentos -->
+  <div class="dash-card">
+    <div class="dash-card-header">
+      <h2><i class="fa fa-file-circle-check"></i> Documentos Recentes</h2>
+      <a href="{{ url_for('patient.upload_documento') }}" class="btn btn-sm btn-primary">
+        <i class="fa fa-plus"></i> Novo
+      </a>
+    </div>
+    {% if recent_docs %}
+      <div class="doc-list-sm">
+        {% for doc in recent_docs %}
+          <div class="doc-item-sm">
+            <div class="doc-icon-sm">
+              {% if doc.extension in ['pdf'] %}<i class="fa fa-file-pdf" style="color:#e53935"></i>
+              {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}<i class="fa fa-file-image" style="color:#1e88e5"></i>
+              {% elif doc.extension in ['doc','docx'] %}<i class="fa fa-file-word" style="color:#1565c0"></i>
+              {% elif doc.extension in ['xls','xlsx'] %}<i class="fa fa-file-excel" style="color:#2e7d32"></i>
+              {% else %}<i class="fa fa-file" style="color:#757575"></i>{% endif %}
+            </div>
+            <div class="doc-info-sm">
+              <span class="doc-name-sm">{{ doc.name }}</span>
+              <span class="doc-meta-sm">{{ doc.category_display }} · {{ doc.created_at.strftime('%d/%m/%Y') }}</span>
+            </div>
+            <a href="{{ url_for('patient.visualizar_documento', doc_id=doc.id) }}"
+               class="btn btn-xs btn-outline" target="_blank">
+              <i class="fa fa-eye"></i>
+            </a>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state-sm">
+        <i class="fa fa-file-circle-plus"></i>
+        <p><a href="{{ url_for('patient.upload_documento') }}">Envie seu primeiro documento</a></p>
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Histórico de eventos -->
+  <div class="dash-card dash-card-wide">
+    <div class="dash-card-header">
+      <h2><i class="fa fa-list-check"></i> Últimos Eventos</h2>
+      <a href="{{ url_for('patient.historico') }}" class="btn btn-sm btn-outline">Histórico completo</a>
+    </div>
+    {% if recent_logs %}
+      <div class="table-responsive">
+        <table class="table-compact">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Evento</th>
+              <th>Descrição</th>
+              <th>Realizado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in recent_logs %}
+              <tr>
+                <td class="nowrap">{{ log.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td><span class="badge badge-action">{{ log.action_display }}</span></td>
+                <td>{{ log.description or '—' }}</td>
+                <td>
+                  {% if log.performed_by == 'professional' and log.professional_ref %}
+                    <i class="fa fa-stethoscope"></i> {{ log.professional_ref.name }}
+                  {% else %}
+                    <i class="fa fa-user"></i> Você
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state-sm">
+        <i class="fa fa-list"></i>
+        <p>Nenhum evento registrado ainda.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

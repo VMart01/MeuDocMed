@@ -1,0 +1,195 @@
+{% extends "paciente_base.html" %}
+{% block title %}Gerenciar Acessos | MeuDocMed{% endblock %}
+{% set pending_requests_count = pending|length %}
+
+{% block content %}
+<div class="page-header">
+  <h1><i class="fa fa-user-shield"></i> Gerenciar Acessos</h1>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }}">{{ message }}
+        <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<!-- Solicitações Pendentes -->
+<section class="access-section">
+  <h2 class="section-title">
+    <i class="fa fa-clock"></i> Solicitações Pendentes
+    {% if pending %}<span class="badge badge-warning">{{ pending|length }}</span>{% endif %}
+  </h2>
+
+  {% if pending %}
+    <div class="access-grid">
+      {% for req in pending %}
+        <div class="access-card access-card-pending">
+          <div class="access-card-header">
+            <div class="access-icon">
+              <i class="fa fa-user-doctor"></i>
+            </div>
+            <div>
+              <h3>{{ req.professional.name }}</h3>
+              <span>{{ req.professional.prof_type_display }} · {{ req.professional.registration }}</span>
+              {% if req.professional.specialty %}
+                <span> · {{ req.professional.specialty }}</span>
+              {% endif %}
+            </div>
+            <div class="access-time">
+              <i class="fa fa-clock"></i>
+              {{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}
+            </div>
+          </div>
+          {% if req.message %}
+            <div class="access-message">
+              <i class="fa fa-comment"></i> {{ req.message }}
+            </div>
+          {% endif %}
+          <div class="access-actions">
+            <form method="post" action="{{ url_for('patient.recusar_acesso', req_id=req.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-outline btn-danger-outline">
+                <i class="fa fa-xmark"></i> Recusar
+              </button>
+            </form>
+            <button class="btn btn-primary" onclick="openApproveModal({{ req.id }}, '{{ req.professional.name|e }}')">
+              <i class="fa fa-check"></i> Aprovar
+            </button>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state-sm">
+      <i class="fa fa-user-check"></i>
+      <p>Nenhuma solicitação pendente.</p>
+    </div>
+  {% endif %}
+</section>
+
+<!-- Histórico de Acessos -->
+<section class="access-section">
+  <h2 class="section-title"><i class="fa fa-clock-rotate-left"></i> Histórico de Acessos</h2>
+
+  {% if history %}
+    <div class="table-responsive">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Profissional</th>
+            <th>Tipo</th>
+            <th>Registro</th>
+            <th>Data da Solicitação</th>
+            <th>Resposta</th>
+            <th>Duração</th>
+            <th>Download</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for req in history %}
+            <tr>
+              <td>{{ req.professional.name }}</td>
+              <td>{{ req.professional.prof_type_display }}</td>
+              <td><code>{{ req.professional.registration }}</code></td>
+              <td class="nowrap">{{ req.requested_at.strftime('%d/%m/%Y %H:%M') }}</td>
+              <td class="nowrap">
+                {% if req.responded_at %}
+                  {{ req.responded_at.strftime('%d/%m/%Y %H:%M') }}
+                {% else %}—{% endif %}
+              </td>
+              <td>
+                {% if req.access_minutes %}{{ req.access_minutes }} min{% else %}—{% endif %}
+              </td>
+              <td>
+                {% if req.allow_download %}
+                  <span class="badge badge-active"><i class="fa fa-check"></i> Sim</span>
+                {% else %}
+                  <span class="badge badge-gray">Não</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if req.status == 'approved' %}
+                  {% if req.is_active %}
+                    <span class="badge badge-active">Ativo</span>
+                  {% else %}
+                    <span class="badge badge-gray">Expirado</span>
+                  {% endif %}
+                {% elif req.status == 'denied' %}
+                  <span class="badge badge-danger">Recusado</span>
+                {% else %}
+                  <span class="badge badge-gray">{{ req.status }}</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state-sm">
+      <i class="fa fa-list-ul"></i>
+      <p>Nenhum acesso registrado ainda.</p>
+    </div>
+  {% endif %}
+</section>
+
+<!-- Modal de Aprovação -->
+<div class="modal-overlay" id="approve-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class="fa fa-user-check"></i> Aprovar Acesso</h3>
+      <button onclick="closeModal()" class="modal-close"><i class="fa fa-xmark"></i></button>
+    </div>
+    <form method="post" id="approve-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="modal-body">
+        <p>Aprovando acesso para <strong id="approve-prof-name"></strong>.</p>
+        <div class="form-group">
+          <label>Tempo de Acesso</label>
+          <div class="duration-pills">
+            {% for d in durations %}
+              <label class="duration-pill">
+                <input type="radio" name="minutes" value="{{ d }}"
+                       {% if d == 30 %}checked{% endif %}>
+                <span>{{ d }} min</span>
+              </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" name="allow_download" value="1">
+            <span>Permitir download dos arquivos</span>
+          </label>
+          <small class="form-hint">Se desmarcado, o profissional pode apenas visualizar no navegador.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal()" class="btn btn-outline">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="fa fa-check"></i> Confirmar Aprovação</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+function openApproveModal(reqId, profName) {
+  document.getElementById('approve-form').action = `/paciente/acessos/${reqId}/aprovar`;
+  document.getElementById('approve-prof-name').textContent = profName;
+  document.getElementById('approve-modal').style.display = 'flex';
+}
+function closeModal() {
+  document.getElementById('approve-modal').style.display = 'none';
+}
+document.getElementById('approve-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+{% endblock %}
+{% endblock %}
