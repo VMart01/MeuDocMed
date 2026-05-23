@@ -4,17 +4,25 @@ utils/storage.py — Abstração de armazenamento de arquivos.
 Em desenvolvimento (sem CLOUDINARY_CLOUD_NAME): salva/lê do disco local.
 Em produção (com CLOUDINARY_CLOUD_NAME):        usa Cloudinary (resource_type=raw).
 
+Estratégia de stored_id:
+  - Cloudinary: guarda o secure_url completo (ex: https://res.cloudinary.com/…)
+                Isso elimina qualquer ambiguidade de reconstrução de URL.
+  - Local:      guarda só o nome do arquivo (ex: 'abc123def.pdf')
+
 A interface pública é:
   upload_file(file_bytes, original_filename)  -> stored_id (str)
   get_file_bytes(stored_id, upload_folder)    -> bytes | None
   delete_stored_file(stored_id, upload_folder)-> bool
 """
+import logging
 import os
-import io
+import re
 import uuid
 import tempfile
 
 from utils.file_utils import get_extension
+
+logger = logging.getLogger(__name__)
 
 
 # ── detecção de backend ───────────────────────────────────────────────────────
@@ -33,14 +41,21 @@ def _init_cloudinary():
     )
 
 
+def _public_id_from_url(url: str) -> str:
+    """Extrai o public_id de um secure_url do Cloudinary."""
+    # https://res.cloudinary.com/{cloud}/raw/upload/v{ver}/{public_id}
+    m = re.search(r'/(?:raw|image|video)/upload/(?:v\d+/)?(.+)$', url)
+    return m.group(1) if m else url
+
+
 # ── upload ────────────────────────────────────────────────────────────────────
 
 def upload_file(file_bytes: bytes, original_filename: str,
                 folder: str = 'meudocmed') -> str:
     """
     Faz upload dos bytes e retorna um stored_id único.
-    - Cloudinary: retorna o public_id  (ex: 'meudocmed/abc123def.pdf')
-    - Local:      retorna o nome do arquivo (ex: 'abc123def.pdf')
+    - Cloudinary: retorna o secure_url completo
+    - Local:      retorna o nome do arquivo
     """
     ext = get_extension(original_filename)
     unique = uuid.uuid4().hex
@@ -48,19 +63,19 @@ def upload_file(file_bytes: bytes, original_filename: str,
     if _cloudinary_configured():
         import cloudinary.uploader
         _init_cloudinary()
-        # Inclui extensão no public_id para que a URL de download seja correta
         public_id = f'{folder}/{unique}.{ext}' if ext else f'{folder}/{unique}'
         result = cloudinary.uploader.upload(
             file_bytes,
             public_id=public_id,
-            resource_type='raw',       # sempre raw — sem transformações
+            resource_type='raw',
             use_filename=False,
             overwrite=False,
         )
-        return result['public_id']     # ex: 'meudocmed/abc123def.pdf'
+        logger.info("Cloudinary upload OK: %s", result.get('secure_url'))
+        return result['secure_url']   # ← guarda a URL completa
     else:
         stored_name = f'{unique}.{ext}' if ext else unique
-        return stored_name             # chamador salva no disco
+        return stored_name
 
 
 # ── leitura ───────────────────────────────────────────────────────────────────
@@ -68,23 +83,18 @@ def upload_file(file_bytes: bytes, original_filename: str,
 def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
     """Retorna os bytes do arquivo ou None se não encontrado."""
     if _cloudinary_configured():
-        import cloudinary.utils
         import requests as req
-        _init_cloudinary()
-        # sign_url=True gera URL assinada — necessário quando o preset
-        # exige autenticação (modo Signed) ou strict transformations ativo
-        url, _ = cloudinary.utils.cloudinary_url(
-            stored_id, resource_type='raw', secure=True, sign_url=True)
+        # stored_id é a secure_url — basta fazer GET direto
         try:
-            r = req.get(url, timeout=20)
+            logger.info("Cloudinary fetch: %s", stored_id)
+            r = req.get(stored_id, timeout=20)
+            logger.info("Cloudinary fetch status: %s", r.status_code)
             if r.status_code == 200:
                 return r.content
-            # fallback: tenta sem assinatura (contas com acesso público)
-            url_plain, _ = cloudinary.utils.cloudinary_url(
-                stored_id, resource_type='raw', secure=True)
-            r2 = req.get(url_plain, timeout=20)
-            return r2.content if r2.status_code == 200 else None
-        except Exception:
+            logger.error("Cloudinary fetch falhou: %s — %s", r.status_code, r.text[:200])
+            return None
+        except Exception as exc:
+            logger.exception("Cloudinary get_file_bytes exception: %s", exc)
             return None
     else:
         folder = upload_folder or os.environ.get('UPLOAD_FOLDER', 'uploads')
@@ -103,9 +113,12 @@ def delete_stored_file(stored_id: str, upload_folder: str = None) -> bool:
         import cloudinary.uploader
         _init_cloudinary()
         try:
-            cloudinary.uploader.destroy(stored_id, resource_type='raw')
+            public_id = (_public_id_from_url(stored_id)
+                         if stored_id.startswith('https://') else stored_id)
+            cloudinary.uploader.destroy(public_id, resource_type='raw')
             return True
-        except Exception:
+        except Exception as exc:
+            logger.exception("Cloudinary delete_stored_file exception: %s", exc)
             return False
     else:
         folder = upload_folder or os.environ.get('UPLOAD_FOLDER', 'uploads')
@@ -138,9 +151,11 @@ class TempFile:
     def __enter__(self) -> str:
         if _cloudinary_configured():
             data = get_file_bytes(self.stored_id)
+            if not data:
+                raise FileNotFoundError(f"Não foi possível baixar: {self.stored_id}")
             suffix = f'.{self.ext}' if self.ext else ''
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-                f.write(data or b'')
+                f.write(data)
                 self._tmp_path = f.name
             return self._tmp_path
         else:
