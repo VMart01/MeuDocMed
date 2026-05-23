@@ -18,6 +18,11 @@ class Config:
         'doc', 'docx', 'xls', 'xlsx', 'txt', 'zip'
     }
 
+    # Cloudinary (armazenamento persistente de uploads em produção)
+    CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+    CLOUDINARY_API_KEY    = os.environ.get('CLOUDINARY_API_KEY')
+    CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
+
     # Mail
     MAIL_SERVER = os.environ.get('MAIL_SERVER') or 'smtp.gmail.com'
     MAIL_PORT = int(os.environ.get('MAIL_PORT') or 587)

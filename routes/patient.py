@@ -17,7 +17,8 @@ from models import (db, Patient, Document, Medication, AccessRequest,
                     MEDICATION_ROUTES, ACCESS_DURATIONS)
 from utils.file_utils import (allowed_extension, validate_magic_number,
                                generate_unique_filename, get_mime_type,
-                               is_viewable_inline, delete_file, get_extension)
+                               is_viewable_inline, get_extension)
+from utils import storage
 from utils.notifications import sse_stream
 from utils.pdf_utils import generate_history_pdf
 
@@ -201,19 +202,20 @@ def upload_documento():
                 errors.append('Arquivo excede o limite de 16 MB.')
 
             if not errors:
-                stored_name = generate_unique_filename(file.filename)
-                upload_folder = current_app.config['UPLOAD_FOLDER']
-                os.makedirs(upload_folder, exist_ok=True)
-                dest = os.path.join(upload_folder, stored_name)
+                stored_id = storage.upload_file(file_bytes, file.filename)
 
-                with open(dest, 'wb') as f:
-                    f.write(file_bytes)
+                # fallback local: salvar no disco se não usar Cloudinary
+                if not storage._cloudinary_configured():
+                    upload_folder = current_app.config['UPLOAD_FOLDER']
+                    os.makedirs(upload_folder, exist_ok=True)
+                    with open(os.path.join(upload_folder, stored_id), 'wb') as f:
+                        f.write(file_bytes)
 
                 doc = Document(
                     patient_id=patient.id,
                     name=name,
                     category=category,
-                    filename=stored_name,
+                    filename=stored_id,
                     original_filename=file.filename,
                     file_size=file_size,
                     observation=observation or None,
@@ -243,10 +245,10 @@ def visualizar_documento(doc_id):
     patient = get_current_patient()
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
+    file_bytes = storage.get_file_bytes(
+        doc.filename, current_app.config['UPLOAD_FOLDER'])
 
-    if not os.path.exists(file_path):
+    if file_bytes is None:
         flash('Arquivo não encontrado no servidor.', 'danger')
         return redirect(url_for('patient.documentos'))
 
@@ -257,7 +259,7 @@ def visualizar_documento(doc_id):
                f'Visualizou documento "{doc.name}".')
 
     return send_file(
-        file_path,
+        io.BytesIO(file_bytes),
         mimetype=mime,
         as_attachment=not inline,
         download_name=doc.original_filename if not inline else None,
@@ -273,10 +275,10 @@ def download_documento(doc_id):
     patient = get_current_patient()
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
+    file_bytes = storage.get_file_bytes(
+        doc.filename, current_app.config['UPLOAD_FOLDER'])
 
-    if not os.path.exists(file_path):
+    if file_bytes is None:
         flash('Arquivo não encontrado no servidor.', 'danger')
         return redirect(url_for('patient.documentos'))
 
@@ -284,7 +286,7 @@ def download_documento(doc_id):
     log_action(patient.id, 'view_doc',
                f'Download do documento "{doc.name}".')
 
-    return send_file(file_path, mimetype=mime, as_attachment=True,
+    return send_file(io.BytesIO(file_bytes), mimetype=mime, as_attachment=True,
                      download_name=doc.original_filename)
 
 
@@ -333,7 +335,7 @@ def excluir_documento(doc_id):
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
     name = doc.name
-    delete_file(current_app.config['UPLOAD_FOLDER'], doc.filename)
+    storage.delete_stored_file(doc.filename, current_app.config['UPLOAD_FOLDER'])
     db.session.delete(doc)
     db.session.flush()
 
@@ -743,12 +745,18 @@ def excluir_conta():
         flash('Senha incorreta. A conta não foi excluída.', 'danger')
         return redirect(url_for('patient.perfil'))
 
-    # Remove arquivos físicos
+    # Remove arquivos físicos / Cloudinary
     upload_folder = current_app.config['UPLOAD_FOLDER']
     for doc in patient.documents.all():
-        delete_file(upload_folder, doc.filename)
+        storage.delete_stored_file(doc.filename, upload_folder)
 
     db.session.delete(patient)
+    db.session.commit()
+
+    session.clear()
+    flash('Sua conta foi excluída permanentemente.', 'info')
+    return redirect(url_for('auth.index'))
+)
     db.session.commit()
 
     session.clear()

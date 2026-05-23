@@ -3,6 +3,7 @@ Rotas do profissional de saúde: portal, busca de pacientes,
 solicitação de acesso (dois métodos), visualização do prontuário,
 upload de documento.
 """
+import io
 import os
 from datetime import datetime, timedelta
 from functools import wraps
@@ -15,6 +16,7 @@ from models import (db, Patient, Professional, Document, AccessRequest,
 from utils.file_utils import (allowed_extension, validate_magic_number,
                                generate_unique_filename, get_mime_type,
                                is_viewable_inline, get_extension)
+from utils import storage
 from utils.notifications import push_notification
 
 professional_bp = Blueprint('professional', __name__, url_prefix='/profissional')
@@ -392,20 +394,20 @@ def upload_documento(patient_id):
                 errors.append('Arquivo excede o limite de 16 MB.')
 
             if not errors:
-                stored_name = generate_unique_filename(file.filename)
-                upload_folder = current_app.config['UPLOAD_FOLDER']
-                os.makedirs(upload_folder, exist_ok=True)
-                dest = os.path.join(upload_folder, stored_name)
+                stored_id = storage.upload_file(file_bytes, file.filename)
 
-                with open(dest, 'wb') as f:
-                    f.write(file_bytes)
+                if not storage._cloudinary_configured():
+                    upload_folder = current_app.config['UPLOAD_FOLDER']
+                    os.makedirs(upload_folder, exist_ok=True)
+                    with open(os.path.join(upload_folder, stored_id), 'wb') as f:
+                        f.write(file_bytes)
 
                 doc = Document(
                     patient_id=patient_id,
                     uploaded_by_professional_id=professional.id,
                     name=name,
                     category=category,
-                    filename=stored_name,
+                    filename=stored_id,
                     original_filename=file.filename,
                     file_size=file_size,
                     observation=observation or None,
@@ -542,23 +544,18 @@ VIEWER_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'txt'}
 @professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/raw')
 @login_required
 def raw_documento(patient_id, doc_id):
-    """Serve os bytes do arquivo inline, com headers que desestimulam download.
-    Usado exclusivamente pelo viewer seguro."""
+    """Serve os bytes do arquivo inline, com headers que desestimulam download."""
     professional = get_current_professional()
-
-    access = get_active_access(professional.id, patient_id)
-    if not access:
+    if not get_active_access(professional.id, patient_id):
         abort(403)
 
     doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
-    upload_folder = current_app.config['UPLOAD_FOLDER']
-    file_path = os.path.join(upload_folder, doc.filename)
-
-    if not os.path.exists(file_path):
+    file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
+    if file_bytes is None:
         abort(404)
 
     mime = get_mime_type(doc.original_filename)
-    response = send_file(file_path, mimetype=mime, as_attachment=False)
+    response = send_file(io.BytesIO(file_bytes), mimetype=mime, as_attachment=False)
     response.headers['Content-Disposition'] = 'inline'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
@@ -569,7 +566,7 @@ def raw_documento(patient_id, doc_id):
 @professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/pdf-info')
 @login_required
 def pdf_info(patient_id, doc_id):
-    """Retorna JSON com número de páginas do PDF. Usado pelo viewer."""
+    """Retorna JSON com número de páginas do PDF."""
     professional = get_current_professional()
     if not get_active_access(professional.id, patient_id):
         abort(403)
@@ -578,15 +575,12 @@ def pdf_info(patient_id, doc_id):
     if get_extension(doc.original_filename) != 'pdf':
         abort(400)
 
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.filename)
-    if not os.path.exists(file_path):
-        abort(404)
-
     try:
-        import fitz  # PyMuPDF
-        pdf = fitz.open(file_path)
-        count = pdf.page_count
-        pdf.close()
+        import fitz
+        with storage.TempFile(doc.filename, current_app.config['UPLOAD_FOLDER'], ext='pdf') as path:
+            pdf = fitz.open(path)
+            count = pdf.page_count
+            pdf.close()
         return jsonify({'pages': count})
     except Exception:
         abort(500)
@@ -595,7 +589,7 @@ def pdf_info(patient_id, doc_id):
 @professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/pdf-page/<int:page_num>')
 @login_required
 def pdf_page(patient_id, doc_id, page_num):
-    """Renderiza uma página do PDF como PNG e a retorna. Usado pelo viewer."""
+    """Renderiza uma página do PDF como PNG."""
     professional = get_current_professional()
     if not get_active_access(professional.id, patient_id):
         abort(403)
@@ -604,70 +598,21 @@ def pdf_page(patient_id, doc_id, page_num):
     if get_extension(doc.original_filename) != 'pdf':
         abort(400)
 
-    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.filename)
-    if not os.path.exists(file_path):
-        abort(404)
-
     try:
-        import io
-        import fitz  # PyMuPDF
-        pdf  = fitz.open(file_path)
-        if page_num < 1 or page_num > pdf.page_count:
-            pdf.close()
-            abort(404)
-        page = pdf[page_num - 1]
-        mat  = fitz.Matrix(2.0, 2.0)   # escala 2× para boa resolução
-        pix  = page.get_pixmap(matrix=mat, alpha=False)
-        png  = pix.tobytes('png')
-        pdf.close()
-
+        import fitz
         from flask import Response as FlaskResponse
+        with storage.TempFile(doc.filename, current_app.config['UPLOAD_FOLDER'], ext='pdf') as path:
+            pdf = fitz.open(path)
+            if page_num < 1 or page_num > pdf.page_count:
+                pdf.close()
+                abort(404)
+            page = pdf[page_num - 1]
+            mat  = fitz.Matrix(2.0, 2.0)
+            pix  = page.get_pixmap(matrix=mat, alpha=False)
+            png  = pix.tobytes('png')
+            pdf.close()
         return FlaskResponse(png, mimetype='image/png',
                              headers={'Cache-Control': 'no-store',
                                       'X-Content-Type-Options': 'nosniff'})
     except Exception:
         abort(500)
-
-
-@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/viewer')
-@login_required
-def viewer_documento(patient_id, doc_id):
-    """Página de visualização segura — sem botão de download, sem URL exposta."""
-    professional = get_current_professional()
-    patient = Patient.query.get_or_404(patient_id)
-
-    access = get_active_access(professional.id, patient_id)
-    if not access:
-        flash('Você não tem acesso ativo ao prontuário deste paciente.', 'warning')
-        return redirect(url_for('professional.solicitar_acesso', patient_id=patient_id))
-
-    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
-    ext = get_extension(doc.original_filename)
-
-    if ext not in VIEWER_EXTENSIONS:
-        flash('Este tipo de arquivo não pode ser visualizado sem permissão de download.', 'warning')
-        return redirect(url_for('professional.prontuario', patient_id=patient_id))
-
-    raw_url      = url_for('professional.raw_documento',
-                           patient_id=patient_id, doc_id=doc_id)
-    pdf_info_url = url_for('professional.pdf_info',
-                           patient_id=patient_id, doc_id=doc_id)
-    # URL template de página — o JS substitui PAGE_NUM pelo número real
-    pdf_page_url = url_for('professional.pdf_page',
-                           patient_id=patient_id, doc_id=doc_id,
-                           page_num=0).replace('/0', '/PAGE_NUM')
-
-    log_access(patient_id, 'view_doc',
-               f'Profissional {professional.name} visualizou "{doc.name}" (somente leitura).',
-               professional.id)
-
-    return render_template('profissional/viewer.html',
-                           professional=professional,
-                           patient=patient,
-                           doc=doc,
-                           access=access,
-                           raw_url=raw_url,
-                           pdf_info_url=pdf_info_url,
-                           pdf_page_url=pdf_page_url,
-                           ext=ext,
-                           patient_id=patient_id)
