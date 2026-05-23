@@ -48,16 +48,16 @@ def upload_file(file_bytes: bytes, original_filename: str,
     if _cloudinary_configured():
         import cloudinary.uploader
         _init_cloudinary()
-        public_id = f'{folder}/{unique}'
+        # Inclui extensão no public_id para que a URL de download seja correta
+        public_id = f'{folder}/{unique}.{ext}' if ext else f'{folder}/{unique}'
         result = cloudinary.uploader.upload(
             file_bytes,
             public_id=public_id,
             resource_type='raw',       # sempre raw — sem transformações
-            format=ext or None,
             use_filename=False,
             overwrite=False,
         )
-        return result['public_id']     # ex: 'meudocmed/abc123.pdf'
+        return result['public_id']     # ex: 'meudocmed/abc123def.pdf'
     else:
         stored_name = f'{unique}.{ext}' if ext else unique
         return stored_name             # chamador salva no disco
@@ -71,11 +71,19 @@ def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
         import cloudinary.utils
         import requests as req
         _init_cloudinary()
+        # sign_url=True gera URL assinada — necessário quando o preset
+        # exige autenticação (modo Signed) ou strict transformations ativo
         url, _ = cloudinary.utils.cloudinary_url(
-            stored_id, resource_type='raw', secure=True)
+            stored_id, resource_type='raw', secure=True, sign_url=True)
         try:
-            r = req.get(url, timeout=15)
-            return r.content if r.status_code == 200 else None
+            r = req.get(url, timeout=20)
+            if r.status_code == 200:
+                return r.content
+            # fallback: tenta sem assinatura (contas com acesso público)
+            url_plain, _ = cloudinary.utils.cloudinary_url(
+                stored_id, resource_type='raw', secure=True)
+            r2 = req.get(url_plain, timeout=20)
+            return r2.content if r2.status_code == 200 else None
         except Exception:
             return None
     else:
