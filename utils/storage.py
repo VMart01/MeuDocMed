@@ -38,6 +38,7 @@ def _init_cloudinary():
         api_key=os.environ.get('CLOUDINARY_API_KEY'),
         api_secret=os.environ.get('CLOUDINARY_API_SECRET'),
         secure=True,
+        signature_algorithm='sha256',   # contas modernas usam SHA256
     )
 
 
@@ -84,41 +85,20 @@ def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
     """Retorna os bytes do arquivo ou None se não encontrado."""
     if _cloudinary_configured():
         import requests as req
-        from cloudinary.utils import private_download_url
+        from cloudinary.utils import cloudinary_url
         _init_cloudinary()
-        import cloudinary.api
         try:
-            logger.error("FETCH stored_id[:80]=%s is_url=%s",
-                         stored_id[:80], stored_id.startswith('https://'))
             public_id = (_public_id_from_url(stored_id)
                          if stored_id.startswith('https://') else stored_id)
-            logger.error("FETCH public_id=%s", public_id)
-
-            # 1a tentativa: Admin API (Basic Auth) para verificar existencia
-            try:
-                resource = cloudinary.api.resource(public_id, resource_type='raw')
-                logger.error("FETCH admin_api found: url=%s", resource.get('secure_url', '')[:80])
-                r = req.get(resource['secure_url'], timeout=30)
-                logger.error("FETCH direct_status=%s", r.status_code)
-                if r.status_code == 200:
-                    return r.content
-                api_key = os.environ.get('CLOUDINARY_API_KEY')
-                api_secret = os.environ.get('CLOUDINARY_API_SECRET')
-                r2 = req.get(resource['secure_url'],
-                             auth=(api_key, api_secret), timeout=30)
-                logger.error("FETCH basic_auth_status=%s", r2.status_code)
-                if r2.status_code == 200:
-                    return r2.content
-            except Exception as api_exc:
-                logger.error("FETCH admin_api_error=%s", str(api_exc)[:120])
-
-            # 2a tentativa: private_download_url
-            dl_url = private_download_url(public_id, '', resource_type='raw')
-            logger.error("FETCH priv_dl_url[:80]=%s", dl_url[:80])
-            r3 = req.get(dl_url, timeout=30)
-            logger.error("FETCH priv_dl_status=%s body=%s", r3.status_code, r3.text[:120])
-            if r3.status_code == 200:
-                return r3.content
+            # SHA256 configurado em _init_cloudinary — gera URL assinada corretamente
+            url, _ = cloudinary_url(public_id, resource_type='raw',
+                                    sign_url=True, secure=True)
+            logger.error("FETCH sha256_signed_url=%s", url[:100])
+            r = req.get(url, timeout=30)
+            logger.error("FETCH status=%s", r.status_code)
+            if r.status_code == 200:
+                return r.content
+            logger.error("FETCH failed: %s %s", r.status_code, r.text[:120])
             return None
         except Exception as exc:
             logger.exception("Cloudinary get_file_bytes exception: %s", exc)
