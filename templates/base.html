@@ -55,23 +55,32 @@
 <div id="pwa-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
   background:#1e3a8a;color:#fff;padding:14px 16px;
   box-shadow:0 -4px 16px rgba(0,0,0,.4);
-  display:none;align-items:center;gap:12px;font-family:system-ui,sans-serif;">
-  <img src="{{ url_for('static', filename='icons/icon-96.png') }}"
-       width="44" height="44" alt="" style="border-radius:10px;flex-shrink:0;">
-  <div style="flex:1;min-width:0;">
-    <div style="font-weight:700;font-size:.95rem;">Instalar MeuDocMed</div>
-    <div style="font-size:.8rem;opacity:.8;">Acesse como app, direto da tela inicial</div>
+  flex-direction:column;gap:10px;font-family:system-ui,sans-serif;">
+  <div style="display:flex;align-items:center;gap:12px;">
+    <img src="{{ url_for('static', filename='icons/icon-96.png') }}"
+         width="44" height="44" alt="" style="border-radius:10px;flex-shrink:0;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-weight:700;font-size:.95rem;">Instalar MeuDocMed</div>
+      <div style="font-size:.8rem;opacity:.8;">Acesse como app, direto da tela inicial</div>
+    </div>
+    <button id="pwa-install-btn"
+      style="background:#3b82f6;color:#fff;border:none;border-radius:8px;
+             padding:8px 16px;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+      Instalar
+    </button>
+    <button id="pwa-close-btn"
+      style="background:transparent;border:none;color:#fff;font-size:1.2rem;
+             cursor:pointer;padding:4px 8px;opacity:.7;flex-shrink:0;">
+      ✕
+    </button>
   </div>
-  <button id="pwa-install-btn"
-    style="background:#3b82f6;color:#fff;border:none;border-radius:8px;
-           padding:8px 16px;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap;">
-    Instalar
-  </button>
-  <button id="pwa-close-btn"
-    style="background:transparent;border:none;color:#fff;font-size:1.2rem;
-           cursor:pointer;padding:4px 8px;opacity:.7;flex-shrink:0;">
-    ✕
-  </button>
+  <!-- Mensagem de fallback quando o prompt nativo não está disponível -->
+  <div id="pwa-fallback-msg" style="display:none;background:#1d4ed8;border-radius:8px;
+       padding:10px 12px;font-size:.83rem;line-height:1.6;">
+    Toque nos <strong>⋮ três pontinhos</strong> do navegador e escolha
+    <strong>"Adicionar à tela inicial"</strong> ou
+    <strong>"Instalar app"</strong>.
+  </div>
 </div>
 
 <!-- Banner iOS (Safari) -->
@@ -110,6 +119,9 @@ if ('serviceWorker' in navigator) {
 }
 
 // 2. Lógica do banner de instalação
+// Estratégia: mostra o banner proativamente (sem esperar beforeinstallprompt,
+// que no Chrome moderno exige métricas de engajamento). Quando o usuário clica
+// em "Instalar", usa o prompt nativo se disponível, senão mostra instruções.
 (function () {
   var DISMISSED_KEY = 'pwa_dismissed';
   var dismissed = localStorage.getItem(DISMISSED_KEY);
@@ -122,8 +134,16 @@ if ('serviceWorker' in navigator) {
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
               && !/chrome|crios|fxios/i.test(navigator.userAgent);
 
-  // iOS Safari: mostra instruções após 2s
+  var deferredPrompt = null;
+
+  // Captura o prompt nativo se disponível (não aguardamos ele para exibir o banner)
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+  });
+
   if (isIOS) {
+    // iOS Safari: mostra banner de instruções após 2s
     setTimeout(function () {
       var b = document.getElementById('ios-banner');
       if (b) b.style.display = 'block';
@@ -136,26 +156,30 @@ if ('serviceWorker' in navigator) {
     return;
   }
 
-  // Android/Chrome: captura beforeinstallprompt
-  // O evento dispara quando o browser confirma que o PWA é instalável.
-  // Pode levar até 2 visitas após o SW ser registrado pela primeira vez.
-  var deferredPrompt = null;
+  // Android/Chrome e demais: mostra o banner após 3s sem esperar o evento
   var banner = document.getElementById('pwa-banner');
+  var fallbackMsg = document.getElementById('pwa-fallback-msg');
 
-  window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault();
-    deferredPrompt = e;
+  setTimeout(function () {
     if (banner) banner.style.display = 'flex';
-  });
+  }, 3000);
 
   var installBtn = document.getElementById('pwa-install-btn');
   if (installBtn) installBtn.onclick = function () {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    deferredPrompt.userChoice.then(function () {
-      deferredPrompt = null;
-      if (banner) banner.style.display = 'none';
-    });
+    if (deferredPrompt) {
+      // Prompt nativo disponível — usa ele
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(function (result) {
+        deferredPrompt = null;
+        if (banner) banner.style.display = 'none';
+      });
+    } else {
+      // Sem prompt nativo — mostra instrução para usar o menu do browser
+      if (fallbackMsg) {
+        fallbackMsg.style.display = 'block';
+        installBtn.style.display = 'none';
+      }
+    }
   };
 
   var closeBtn = document.getElementById('pwa-close-btn');
