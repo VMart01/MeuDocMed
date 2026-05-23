@@ -2,7 +2,7 @@
 MeuDocMed — Aplicação Flask principal.
 """
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template, send_from_directory
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 from dotenv import load_dotenv
@@ -45,6 +45,12 @@ def create_app(config_name: str = None) -> Flask:
     # Cria tabelas se não existirem
     with app.app_context():
         db.create_all()
+
+    # Service Worker — precisa estar na raiz do domínio
+    @app.route('/sw.js')
+    def service_worker():
+        return send_from_directory(app.static_folder, 'sw.js',
+                                   mimetype='application/javascript')
 
     # Handlers de erro
     @app.errorhandler(404)

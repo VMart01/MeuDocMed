@@ -8,6 +8,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <!-- PWA -->
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MeuDocMed">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
   {% block extra_head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -42,5 +49,118 @@
 
 <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 {% block extra_scripts %}{% endblock %}
+
+<!-- ===== PWA: Banner de instalação ===== -->
+<!-- Banner Android/Chrome -->
+<div id="pwa-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  background:#1e3a8a;color:#fff;padding:14px 16px;
+  box-shadow:0 -4px 16px rgba(0,0,0,.4);
+  display:none;align-items:center;gap:12px;font-family:system-ui,sans-serif;">
+  <img src="{{ url_for('static', filename='icons/icon-96.png') }}"
+       width="44" height="44" alt="" style="border-radius:10px;flex-shrink:0;">
+  <div style="flex:1;min-width:0;">
+    <div style="font-weight:700;font-size:.95rem;">Instalar MeuDocMed</div>
+    <div style="font-size:.8rem;opacity:.8;">Acesse como app, direto da tela inicial</div>
+  </div>
+  <button id="pwa-install-btn"
+    style="background:#3b82f6;color:#fff;border:none;border-radius:8px;
+           padding:8px 16px;font-size:.88rem;font-weight:600;cursor:pointer;white-space:nowrap;">
+    Instalar
+  </button>
+  <button id="pwa-close-btn"
+    style="background:transparent;border:none;color:#fff;font-size:1.2rem;
+           cursor:pointer;padding:4px 8px;opacity:.7;flex-shrink:0;">
+    ✕
+  </button>
+</div>
+
+<!-- Banner iOS (Safari) -->
+<div id="ios-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  background:#1e3a8a;color:#fff;padding:16px;
+  box-shadow:0 -4px 16px rgba(0,0,0,.4);font-family:system-ui,sans-serif;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+    <img src="{{ url_for('static', filename='icons/icon-96.png') }}"
+         width="40" height="40" alt="" style="border-radius:9px;flex-shrink:0;">
+    <div>
+      <div style="font-weight:700;font-size:.95rem;">Instalar MeuDocMed</div>
+      <div style="font-size:.8rem;opacity:.8;">Adicione à tela inicial do iPhone/iPad</div>
+    </div>
+    <button id="ios-close-btn"
+      style="background:transparent;border:none;color:#fff;font-size:1.2rem;
+             cursor:pointer;margin-left:auto;opacity:.7;padding:4px 8px;">✕</button>
+  </div>
+  <div style="background:#1d4ed8;border-radius:10px;padding:12px;font-size:.84rem;line-height:1.6;">
+    1. Toque em
+    <span style="display:inline-flex;align-items:center;gap:4px;background:#2563eb;
+                 border-radius:6px;padding:2px 7px;font-weight:600;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+        <path d="M12 2l-7 7h5v8h4V9h5l-7-7z"/>
+        <rect x="3" y="18" width="18" height="3" rx="1" fill="white"/>
+      </svg> Compartilhar
+    </span>
+    no Safari<br>
+    2. Role e toque em <strong>"Adicionar à Tela de Início"</strong> <span style="font-size:1.1em">⊕</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  var DISMISSED_KEY = 'pwa_dismissed';
+  var dismissed = localStorage.getItem(DISMISSED_KEY);
+  if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 3600 * 1000) return; // 7 dias
+
+  var isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                     || window.navigator.standalone === true;
+  if (isStandalone) return; // já instalado
+
+  var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
+              && !/chrome|crios|fxios/i.test(navigator.userAgent);
+
+  // --- iOS: mostra banner de instrução após 3s ---
+  if (isIOS) {
+    setTimeout(function () {
+      var b = document.getElementById('ios-banner');
+      if (b) b.style.display = 'block';
+    }, 3000);
+    var closeIos = document.getElementById('ios-close-btn');
+    if (closeIos) closeIos.onclick = function () {
+      document.getElementById('ios-banner').style.display = 'none';
+      localStorage.setItem(DISMISSED_KEY, Date.now());
+    };
+    return;
+  }
+
+  // --- Android/Chrome: captura beforeinstallprompt ---
+  var deferredPrompt = null;
+  var banner = document.getElementById('pwa-banner');
+
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    if (banner) banner.style.display = 'flex';
+  });
+
+  var installBtn = document.getElementById('pwa-install-btn');
+  if (installBtn) installBtn.onclick = function () {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function () {
+      deferredPrompt = null;
+      if (banner) banner.style.display = 'none';
+    });
+  };
+
+  var closeBtn = document.getElementById('pwa-close-btn');
+  if (closeBtn) closeBtn.onclick = function () {
+    if (banner) banner.style.display = 'none';
+    localStorage.setItem(DISMISSED_KEY, Date.now());
+  };
+
+  // Registra Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(function () {});
+  }
+})();
+</script>
 </body>
 </html>
