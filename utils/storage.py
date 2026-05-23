@@ -71,7 +71,7 @@ def upload_file(file_bytes: bytes, original_filename: str,
             use_filename=False,
             overwrite=False,
         )
-        logger.info("Cloudinary upload OK: %s", result.get('secure_url'))
+        logger.error("Cloudinary upload OK: url=%s", result.get('secure_url', 'NONE')[:80])
         return result['secure_url']   # ← guarda a URL completa
     else:
         stored_name = f'{unique}.{ext}' if ext else unique
@@ -86,19 +86,39 @@ def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
         import requests as req
         from cloudinary.utils import private_download_url
         _init_cloudinary()
+        import cloudinary.api
         try:
-            # Extrai public_id da URL armazenada
+            logger.error("FETCH stored_id[:80]=%s is_url=%s",
+                         stored_id[:80], stored_id.startswith('https://'))
             public_id = (_public_id_from_url(stored_id)
                          if stored_id.startswith('https://') else stored_id)
-            # Para recursos raw o public_id JÁ inclui a extensão (ex: meudocmed/abc.pdf)
-            # Passar format='' faz o Cloudinary buscar pelo public_id exato
+            logger.error("FETCH public_id=%s", public_id)
+
+            # 1a tentativa: Admin API (Basic Auth) para verificar existencia
+            try:
+                resource = cloudinary.api.resource(public_id, resource_type='raw')
+                logger.error("FETCH admin_api found: url=%s", resource.get('secure_url', '')[:80])
+                r = req.get(resource['secure_url'], timeout=30)
+                logger.error("FETCH direct_status=%s", r.status_code)
+                if r.status_code == 200:
+                    return r.content
+                api_key = os.environ.get('CLOUDINARY_API_KEY')
+                api_secret = os.environ.get('CLOUDINARY_API_SECRET')
+                r2 = req.get(resource['secure_url'],
+                             auth=(api_key, api_secret), timeout=30)
+                logger.error("FETCH basic_auth_status=%s", r2.status_code)
+                if r2.status_code == 200:
+                    return r2.content
+            except Exception as api_exc:
+                logger.error("FETCH admin_api_error=%s", str(api_exc)[:120])
+
+            # 2a tentativa: private_download_url
             dl_url = private_download_url(public_id, '', resource_type='raw')
-            logger.error("Cloudinary private_download pid=%s", public_id)
-            r = req.get(dl_url, timeout=30)
-            logger.error("Cloudinary fetch status: %s", r.status_code)
-            if r.status_code == 200:
-                return r.content
-            logger.error("Cloudinary fetch falhou: %s — %s", r.status_code, r.text[:200])
+            logger.error("FETCH priv_dl_url[:80]=%s", dl_url[:80])
+            r3 = req.get(dl_url, timeout=30)
+            logger.error("FETCH priv_dl_status=%s body=%s", r3.status_code, r3.text[:120])
+            if r3.status_code == 200:
+                return r3.content
             return None
         except Exception as exc:
             logger.exception("Cloudinary get_file_bytes exception: %s", exc)
