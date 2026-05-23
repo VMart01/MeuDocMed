@@ -123,7 +123,7 @@ if ('serviceWorker' in navigator) {
 // que no Chrome moderno exige métricas de engajamento). Quando o usuário clica
 // em "Instalar", usa o prompt nativo se disponível, senão mostra instruções.
 (function () {
-  var DISMISSED_KEY = 'pwa_dismissed';
+  var DISMISSED_KEY = 'pwa_dismissed_v2';
   var dismissed = localStorage.getItem(DISMISSED_KEY);
   if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 3600 * 1000) return;
 
@@ -162,7 +162,7 @@ if ('serviceWorker' in navigator) {
 
   setTimeout(function () {
     if (banner) banner.style.display = 'flex';
-  }, 3000);
+  }, 1500);
 
   var installBtn = document.getElementById('pwa-install-btn');
   if (installBtn) installBtn.onclick = function () {
