@@ -104,24 +104,30 @@
 </div>
 
 <script>
+// 1. Registra SW imediatamente (necessário para PWA ser instalável)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(function () {});
+}
+
+// 2. Lógica do banner de instalação
 (function () {
   var DISMISSED_KEY = 'pwa_dismissed';
   var dismissed = localStorage.getItem(DISMISSED_KEY);
-  if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 3600 * 1000) return; // 7 dias
+  if (dismissed && Date.now() - parseInt(dismissed) < 7 * 24 * 3600 * 1000) return;
 
   var isStandalone = window.matchMedia('(display-mode: standalone)').matches
                      || window.navigator.standalone === true;
-  if (isStandalone) return; // já instalado
+  if (isStandalone) return; // já instalado como app
 
   var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent)
               && !/chrome|crios|fxios/i.test(navigator.userAgent);
 
-  // --- iOS: mostra banner de instrução após 3s ---
+  // iOS Safari: mostra instruções após 2s
   if (isIOS) {
     setTimeout(function () {
       var b = document.getElementById('ios-banner');
       if (b) b.style.display = 'block';
-    }, 3000);
+    }, 2000);
     var closeIos = document.getElementById('ios-close-btn');
     if (closeIos) closeIos.onclick = function () {
       document.getElementById('ios-banner').style.display = 'none';
@@ -130,7 +136,9 @@
     return;
   }
 
-  // --- Android/Chrome: captura beforeinstallprompt ---
+  // Android/Chrome: captura beforeinstallprompt
+  // O evento dispara quando o browser confirma que o PWA é instalável.
+  // Pode levar até 2 visitas após o SW ser registrado pela primeira vez.
   var deferredPrompt = null;
   var banner = document.getElementById('pwa-banner');
 
@@ -155,11 +163,6 @@
     if (banner) banner.style.display = 'none';
     localStorage.setItem(DISMISSED_KEY, Date.now());
   };
-
-  // Registra Service Worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(function () {});
-  }
 })();
 </script>
 </body>

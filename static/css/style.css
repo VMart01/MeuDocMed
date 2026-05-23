@@ -722,4 +722,18 @@ code { background: var(--gray-100); padding: .15rem .4rem; border-radius: 4px;
   .access-card-header { flex-direction: column; }
   .patient-search-card { flex-direction: column; align-items: flex-start; }
   .cta-links { flex-direction: column; }
+
+  /* Navbar mobile: esconde nome/tipo do usuário, mantém ícone de sair visível */
+  .top-nav { padding: 0 .75rem; }
+  .nav-user span, .nav-user small { display: none; }
+  .nav-role-badge { display: none; }
+  .nav-brand span:last-child { display: none; } /* esconde "MeuDocMed" texto, fica só o ícone */
+  .btn-logout {
+    background: var(--danger-light);
+    color: var(--danger);
+    border-radius: var(--radius);
+    padding: .45rem .75rem;
+    font-size: 1.05rem;
+  }
+  .top-nav-right { gap: .5rem; }
 }
