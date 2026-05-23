@@ -84,10 +84,17 @@ def get_file_bytes(stored_id: str, upload_folder: str = None) -> bytes | None:
     """Retorna os bytes do arquivo ou None se não encontrado."""
     if _cloudinary_configured():
         import requests as req
-        # stored_id é a secure_url — basta fazer GET direto
+        from cloudinary.utils import cloudinary_url
+        _init_cloudinary()
         try:
-            logger.info("Cloudinary fetch: %s", stored_id)
-            r = req.get(stored_id, timeout=20)
+            # Extrai o public_id da URL e gera URL assinada (resolve 401 em contas
+            # com strict mode ou upload preset Signed)
+            public_id = (_public_id_from_url(stored_id)
+                         if stored_id.startswith('https://') else stored_id)
+            signed_url, _ = cloudinary_url(
+                public_id, resource_type='raw', sign_url=True, secure=True)
+            logger.info("Cloudinary fetch (signed): %s", signed_url[:100])
+            r = req.get(signed_url, timeout=20)
             logger.info("Cloudinary fetch status: %s", r.status_code)
             if r.status_code == 200:
                 return r.content
