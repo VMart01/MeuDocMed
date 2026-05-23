@@ -12,16 +12,17 @@
       font-family: system-ui, sans-serif;
       background: #111827;
       color: #f3f4f6;
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
     }
 
     /* Barra superior */
     #topbar {
+      position: sticky;
+      top: 0;
       height: 52px;
       background: #1f2937;
       border-bottom: 1px solid #374151;
@@ -29,7 +30,7 @@
       align-items: center;
       gap: 10px;
       padding: 0 16px;
-      flex-shrink: 0;
+      z-index: 100;
       box-shadow: 0 2px 6px rgba(0,0,0,.4);
     }
 
@@ -59,7 +60,6 @@
       padding: 3px 9px;
       border-radius: 12px;
       white-space: nowrap;
-      letter-spacing: .03em;
     }
 
     #topbar .btn-back {
@@ -78,33 +78,63 @@
     }
     #topbar .btn-back:hover { background: #4b5563; }
 
+    /* Navegação PDF */
+    #pdf-nav {
+      position: sticky;
+      bottom: 0;
+      background: #1f2937cc;
+      backdrop-filter: blur(6px);
+      border-top: 1px solid #374151;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      z-index: 100;
+    }
+    #pdf-nav button {
+      background: #374151;
+      border: none;
+      color: #d1d5db;
+      border-radius: 6px;
+      padding: 6px 14px;
+      cursor: pointer;
+      font-size: .84rem;
+      transition: background .15s;
+    }
+    #pdf-nav button:hover:not(:disabled) { background: #4b5563; }
+    #pdf-nav button:disabled { opacity: .35; cursor: default; }
+    #pdf-nav #page-info { font-size: .84rem; color: #9ca3af; min-width: 100px; text-align: center; }
+
     /* Área de conteúdo */
     #viewer-area {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: center;
-      overflow-y: auto;
+      padding: 16px 0 80px;
       overflow-x: hidden;
-      background: #111827;
     }
 
-    /* PDF: iframe sandboxed (sem allow-downloads = botão download desabilitado) */
-    #pdf-frame {
-      width: 100%;
-      flex: 1;
-      border: none;
+    /* Páginas PDF como imagens (renderizadas server-side) */
+    .pdf-page-img {
       display: block;
+      max-width: min(860px, 96vw);
+      width: 100%;
+      margin: 8px auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
+      background: #fff;
     }
+    /* Impede arrastar a imagem */
+    .pdf-page-img { pointer-events: none; }
 
     /* Imagem em canvas */
     #img-canvas {
       max-width: 96vw;
       max-height: calc(100vh - 52px);
-      object-fit: contain;
-      box-shadow: 0 4px 20px rgba(0,0,0,.6);
-      margin: 16px auto;
       display: block;
+      margin: 16px auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
     }
 
     /* Texto */
@@ -125,19 +155,35 @@
     }
 
     /* Loading / Erro */
-    #loading, #error-msg {
-      margin: auto;
+    #status-box {
+      margin: 60px auto;
       text-align: center;
       padding: 40px;
       color: #6b7280;
     }
-    #loading .fa-spinner { font-size: 2.5rem; color: #3b82f6; animation: spin 1s linear infinite; }
-    #loading p { margin-top: 12px; font-size: .9rem; }
-    #error-msg { color: #f87171; display: none; }
-    #error-msg .fa-circle-exclamation { font-size: 2rem; }
-    #error-msg p { margin-top: 12px; }
-
+    #status-box .fa-spinner { font-size: 2.5rem; color: #3b82f6; animation: spin 1s linear infinite; }
+    #status-box p { margin-top: 14px; font-size: .95rem; }
+    #status-box.error { color: #f87171; }
+    #status-box.error .fa { font-size: 2rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Barra de progresso PDF */
+    #pdf-progress {
+      width: min(400px, 80vw);
+      background: #374151;
+      border-radius: 8px;
+      height: 6px;
+      margin: 16px auto 0;
+      overflow: hidden;
+      display: none;
+    }
+    #pdf-progress-bar {
+      height: 100%;
+      background: #3b82f6;
+      border-radius: 8px;
+      width: 0;
+      transition: width .3s;
+    }
   </style>
 </head>
 <body>
@@ -154,104 +200,193 @@
 
 <!-- Área de conteúdo -->
 <div id="viewer-area">
-  <div id="loading">
+  <div id="status-box">
     <div><i class="fa fa-spinner"></i></div>
-    <p>Carregando documento…</p>
-  </div>
-  <div id="error-msg">
-    <i class="fa fa-circle-exclamation"></i>
-    <p>Não foi possível carregar o documento.</p>
+    <p id="status-msg">Carregando documento…</p>
+    <div id="pdf-progress"><div id="pdf-progress-bar"></div></div>
   </div>
 </div>
 
-<!-- Bloqueia atalhos de teclado e menu de contexto -->
+<!-- Navegação PDF -->
+<div id="pdf-nav">
+  <button id="btn-first" title="Primeira página"><i class="fa fa-backward-step"></i></button>
+  <button id="btn-prev"><i class="fa fa-chevron-left"></i> Ant.</button>
+  <span id="page-info">—</span>
+  <button id="btn-next">Próx. <i class="fa fa-chevron-right"></i></button>
+  <button id="btn-last" title="Última página"><i class="fa fa-forward-step"></i></button>
+</div>
+
+<!-- Bloqueia atalhos e menu de contexto -->
 <script>
   document.addEventListener('contextmenu', function(e) { e.preventDefault(); });
   document.addEventListener('keydown', function(e) {
-    if ((e.ctrlKey || e.metaKey) && ['s','p','u','a'].indexOf(e.key.toLowerCase()) !== -1) {
+    if ((e.ctrlKey || e.metaKey) && ['s','p','u','a'].indexOf(e.key.toLowerCase()) !== -1)
       e.preventDefault();
-    }
   });
+  // Impede arrastar elementos
+  document.addEventListener('dragstart', function(e) { e.preventDefault(); });
 </script>
 
 {% set ext_lower = ext | lower %}
 
+{# ===================== PDF — renderizado server-side como imagens ===================== #}
 {% if ext_lower == 'pdf' %}
-<!-- PDF: iframe com sandbox sem allow-downloads.
-     O Chrome desabilita o botão de download do viewer nativo dentro de iframes sandboxed. -->
 <script>
-  var RAW_URL = {{ raw_url | tojson }};
-  var area    = document.getElementById('viewer-area');
-  var loading = document.getElementById('loading');
+(function() {
+  var INFO_URL     = {{ pdf_info_url | tojson }};
+  var PAGE_TPL     = {{ pdf_page_url | tojson }};   // contém "PAGE_NUM"
+  var area         = document.getElementById('viewer-area');
+  var statusBox    = document.getElementById('status-box');
+  var statusMsg    = document.getElementById('status-msg');
+  var progressWrap = document.getElementById('pdf-progress');
+  var progressBar  = document.getElementById('pdf-progress-bar');
+  var nav          = document.getElementById('pdf-nav');
+  var pageInfoEl   = document.getElementById('page-info');
+  var images       = [];   // Array de <img> por página
+  var currentPage  = 1;
+  var totalPages   = 0;
 
-  var frame = document.createElement('iframe');
-  frame.id  = 'pdf-frame';
-  frame.src = RAW_URL;
-  // allow-same-origin: envia cookies de sessão
-  // SEM allow-downloads: desabilita botão de download do viewer nativo
-  // SEM allow-scripts: impede JS dentro do iframe
-  frame.setAttribute('sandbox', 'allow-same-origin');
-  frame.setAttribute('title', {{ doc.name | tojson }});
+  function pageUrl(n) {
+    return PAGE_TPL.replace('PAGE_NUM', n);
+  }
 
-  frame.addEventListener('load', function() {
-    loading.style.display = 'none';
-    frame.style.display   = 'block';
-  });
-  frame.style.display = 'none';
-  area.appendChild(frame);
+  function updateNav() {
+    pageInfoEl.textContent = 'Página ' + currentPage + ' / ' + totalPages;
+    document.getElementById('btn-prev').disabled  = currentPage <= 1;
+    document.getElementById('btn-next').disabled  = currentPage >= totalPages;
+    document.getElementById('btn-first').disabled = currentPage <= 1;
+    document.getElementById('btn-last').disabled  = currentPage >= totalPages;
+  }
 
-  // Fallback: se demorar > 15s, mostra erro
-  setTimeout(function() {
-    if (loading.style.display !== 'none') {
-      loading.style.display = 'none';
-      document.getElementById('error-msg').style.display = 'block';
+  function goToPage(n) {
+    if (n < 1 || n > totalPages) return;
+    currentPage = n;
+    images[n - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    updateNav();
+  }
+
+  document.getElementById('btn-first').onclick = function() { goToPage(1); };
+  document.getElementById('btn-last').onclick  = function() { goToPage(totalPages); };
+  document.getElementById('btn-prev').onclick  = function() { goToPage(currentPage - 1); };
+  document.getElementById('btn-next').onclick  = function() { goToPage(currentPage + 1); };
+
+  // Detecta qual página está visível ao rolar
+  function onScroll() {
+    for (var i = 0; i < images.length; i++) {
+      var rect = images[i].getBoundingClientRect();
+      if (rect.top >= 0 && rect.top < window.innerHeight * 0.6) {
+        if (currentPage !== i + 1) { currentPage = i + 1; updateNav(); }
+        break;
+      }
     }
-  }, 15000);
+  }
+
+  function showError(msg) {
+    statusBox.className = 'error';
+    statusBox.innerHTML = '<i class="fa fa-circle-exclamation"></i><p>' + (msg || 'Erro ao carregar o documento.') + '</p>';
+  }
+
+  // 1. Descobre número de páginas
+  fetch(INFO_URL, { credentials: 'same-origin' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('info failed');
+      return r.json();
+    })
+    .then(function(data) {
+      totalPages = data.pages;
+      if (!totalPages) { showError('PDF vazio ou inválido.'); return; }
+
+      statusMsg.textContent = 'Renderizando ' + totalPages + ' página(s)…';
+      progressWrap.style.display = 'block';
+
+      // 2. Carrega cada página como <img> (PNG gerado server-side)
+      var loaded = 0;
+      var container = document.createDocumentFragment();
+
+      for (var p = 1; p <= totalPages; p++) {
+        (function(pageNum) {
+          var img = new Image();
+          img.className = 'pdf-page-img';
+          img.alt = 'Página ' + pageNum;
+          img.dataset.page = pageNum;
+
+          img.onload = function() {
+            loaded++;
+            progressBar.style.width = Math.round((loaded / totalPages) * 100) + '%';
+            if (loaded === totalPages) {
+              statusBox.style.display = 'none';
+              nav.style.display = 'flex';
+              window.addEventListener('scroll', onScroll, { passive: true });
+              updateNav();
+            }
+          };
+          img.onerror = function() {
+            showError('Erro ao renderizar a página ' + pageNum + '.');
+          };
+
+          // Carrega a URL da página (autenticada pelo cookie de sessão)
+          img.src = pageUrl(pageNum);
+          images[pageNum - 1] = img;
+          container.appendChild(img);
+        })(p);
+      }
+
+      // Insere todas as imagens de uma vez
+      area.insertBefore(container, statusBox);
+    })
+    .catch(function(err) {
+      showError('Não foi possível carregar o PDF.');
+    });
+})();
 </script>
 
+{# ===================== IMAGEM — fetch → blob → canvas ===================== #}
 {% elif ext_lower in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] %}
-<!-- Imagem: fetch → blob → canvas (URL nunca exposta ao navegador) -->
 <script>
-  var RAW_URL = {{ raw_url | tojson }};
-  var area    = document.getElementById('viewer-area');
-  var loading = document.getElementById('loading');
+(function() {
+  var RAW_URL  = {{ raw_url | tojson }};
+  var area     = document.getElementById('viewer-area');
+  var statusBox = document.getElementById('status-box');
 
   fetch(RAW_URL, { credentials: 'same-origin' })
     .then(function(r) {
-      if (!r.ok) throw new Error('fetch failed');
+      if (!r.ok) throw new Error();
       return r.blob();
     })
     .then(function(blob) {
       var blobUrl = URL.createObjectURL(blob);
       var img = new Image();
       img.onload = function() {
-        var canvas   = document.createElement('canvas');
-        canvas.id    = 'img-canvas';
-        var maxW     = window.innerWidth  * 0.94;
-        var maxH     = window.innerHeight - 70;
-        var ratio    = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+        var canvas  = document.createElement('canvas');
+        canvas.id   = 'img-canvas';
+        var maxW    = window.innerWidth  * 0.94;
+        var maxH    = window.innerHeight - 70;
+        var ratio   = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
         canvas.width  = img.naturalWidth  * ratio;
         canvas.height = img.naturalHeight * ratio;
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(blobUrl); // descarta a URL imediatamente
-        loading.style.display = 'none';
+        URL.revokeObjectURL(blobUrl);
+        statusBox.style.display = 'none';
         area.appendChild(canvas);
       };
-      img.onerror = function() { throw new Error('img load failed'); };
+      img.onerror = function() { throw new Error('img'); };
       img.src = blobUrl;
     })
     .catch(function() {
-      loading.style.display = 'none';
-      document.getElementById('error-msg').style.display = 'block';
+      var s = document.getElementById('status-box');
+      s.className = 'error';
+      s.innerHTML = '<i class="fa fa-circle-exclamation"></i><p>Não foi possível carregar a imagem.</p>';
     });
+})();
 </script>
 
+{# ===================== TEXTO ===================== #}
 {% elif ext_lower == 'txt' %}
-<!-- Texto puro: fetch → pre -->
 <script>
-  var RAW_URL = {{ raw_url | tojson }};
-  var area    = document.getElementById('viewer-area');
-  var loading = document.getElementById('loading');
+(function() {
+  var RAW_URL  = {{ raw_url | tojson }};
+  var area     = document.getElementById('viewer-area');
+  var statusBox = document.getElementById('status-box');
 
   fetch(RAW_URL, { credentials: 'same-origin' })
     .then(function(r) {
@@ -259,18 +394,19 @@
       return r.text();
     })
     .then(function(text) {
-      var pre      = document.createElement('pre');
-      pre.id       = 'txt-pre';
+      var pre = document.createElement('pre');
+      pre.id  = 'txt-pre';
       pre.textContent = text;
-      loading.style.display = 'none';
+      statusBox.style.display = 'none';
       area.appendChild(pre);
     })
     .catch(function() {
-      loading.style.display = 'none';
-      document.getElementById('error-msg').style.display = 'block';
+      var s = document.getElementById('status-box');
+      s.className = 'error';
+      s.innerHTML = '<i class="fa fa-circle-exclamation"></i><p>Não foi possível carregar o arquivo.</p>';
     });
+})();
 </script>
-
 {% endif %}
 
 </body>

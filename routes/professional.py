@@ -566,6 +566,69 @@ def raw_documento(patient_id, doc_id):
     return response
 
 
+@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/pdf-info')
+@login_required
+def pdf_info(patient_id, doc_id):
+    """Retorna JSON com número de páginas do PDF. Usado pelo viewer."""
+    professional = get_current_professional()
+    if not get_active_access(professional.id, patient_id):
+        abort(403)
+
+    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
+    if get_extension(doc.original_filename) != 'pdf':
+        abort(400)
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.filename)
+    if not os.path.exists(file_path):
+        abort(404)
+
+    try:
+        import fitz  # PyMuPDF
+        pdf = fitz.open(file_path)
+        count = pdf.page_count
+        pdf.close()
+        return jsonify({'pages': count})
+    except Exception:
+        abort(500)
+
+
+@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/pdf-page/<int:page_num>')
+@login_required
+def pdf_page(patient_id, doc_id, page_num):
+    """Renderiza uma página do PDF como PNG e a retorna. Usado pelo viewer."""
+    professional = get_current_professional()
+    if not get_active_access(professional.id, patient_id):
+        abort(403)
+
+    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
+    if get_extension(doc.original_filename) != 'pdf':
+        abort(400)
+
+    file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], doc.filename)
+    if not os.path.exists(file_path):
+        abort(404)
+
+    try:
+        import io
+        import fitz  # PyMuPDF
+        pdf  = fitz.open(file_path)
+        if page_num < 1 or page_num > pdf.page_count:
+            pdf.close()
+            abort(404)
+        page = pdf[page_num - 1]
+        mat  = fitz.Matrix(2.0, 2.0)   # escala 2× para boa resolução
+        pix  = page.get_pixmap(matrix=mat, alpha=False)
+        png  = pix.tobytes('png')
+        pdf.close()
+
+        from flask import Response as FlaskResponse
+        return FlaskResponse(png, mimetype='image/png',
+                             headers={'Cache-Control': 'no-store',
+                                      'X-Content-Type-Options': 'nosniff'})
+    except Exception:
+        abort(500)
+
+
 @professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/viewer')
 @login_required
 def viewer_documento(patient_id, doc_id):
@@ -585,8 +648,14 @@ def viewer_documento(patient_id, doc_id):
         flash('Este tipo de arquivo não pode ser visualizado sem permissão de download.', 'warning')
         return redirect(url_for('professional.prontuario', patient_id=patient_id))
 
-    raw_url = url_for('professional.raw_documento',
-                      patient_id=patient_id, doc_id=doc_id)
+    raw_url      = url_for('professional.raw_documento',
+                           patient_id=patient_id, doc_id=doc_id)
+    pdf_info_url = url_for('professional.pdf_info',
+                           patient_id=patient_id, doc_id=doc_id)
+    # URL template de página — o JS substitui PAGE_NUM pelo número real
+    pdf_page_url = url_for('professional.pdf_page',
+                           patient_id=patient_id, doc_id=doc_id,
+                           page_num=0).replace('/0', '/PAGE_NUM')
 
     log_access(patient_id, 'view_doc',
                f'Profissional {professional.name} visualizou "{doc.name}" (somente leitura).',
@@ -598,5 +667,7 @@ def viewer_documento(patient_id, doc_id):
                            doc=doc,
                            access=access,
                            raw_url=raw_url,
+                           pdf_info_url=pdf_info_url,
+                           pdf_page_url=pdf_page_url,
                            ext=ext,
                            patient_id=patient_id)
