@@ -307,7 +307,7 @@ def visualizar_documento(patient_id, doc_id):
 
     # Sem acesso a download: redireciona para viewer seguro
     if not access.allow_download:
-        return redirect(url_for('professional.viewer_documento',
+        return redirect(url_for('professional.raw_documento',
                                 patient_id=patient_id, doc_id=doc_id))
 
     file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
