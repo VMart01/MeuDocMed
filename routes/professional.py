@@ -307,7 +307,7 @@ def visualizar_documento(patient_id, doc_id):
 
     # Sem acesso a download: redireciona para viewer seguro
     if not access.allow_download:
-        return redirect(url_for('professional.raw_documento',
+        return redirect(url_for('professional.viewer_documento',
                                 patient_id=patient_id, doc_id=doc_id))
 
     file_bytes = storage.get_file_bytes(doc.filename, current_app.config['UPLOAD_FOLDER'])
@@ -616,3 +616,29 @@ def pdf_page(patient_id, doc_id, page_num):
                                       'X-Content-Type-Options': 'nosniff'})
     except Exception:
         abort(500)
+
+
+# ---------------------------------------------------------------------------
+# Viewer seguro (somente leitura) — renderiza PDF como imagens
+# ---------------------------------------------------------------------------
+@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/viewer')
+@login_required
+def viewer_documento(patient_id, doc_id):
+    """Exibe o documento em modo somente leitura (PDF renderizado como imagens)."""
+    professional = get_current_professional()
+    if not get_active_access(professional.id, patient_id):
+        abort(403)
+
+    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
+    ext = get_extension(doc.original_filename)
+
+    pdf_info_url = url_for('professional.pdf_info', patient_id=patient_id, doc_id=doc_id)
+    pdf_page_url = url_for('professional.pdf_page', patient_id=patient_id,
+                           doc_id=doc_id, page_num=0).replace('/0', '/PAGE_NUM')
+
+    return render_template('profissional/viewer.html',
+                           doc=doc,
+                           patient_id=patient_id,
+                           ext=ext,
+                           pdf_info_url=pdf_info_url,
+                           pdf_page_url=pdf_page_url)
