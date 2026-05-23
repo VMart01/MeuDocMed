@@ -756,9 +756,3 @@ def excluir_conta():
     session.clear()
     flash('Sua conta foi excluída permanentemente.', 'info')
     return redirect(url_for('auth.index'))
-)
-    db.session.commit()
-
-    session.clear()
-    flash('Sua conta foi excluída permanentemente.', 'info')
-    return redirect(url_for('auth.index'))
