@@ -1,6 +1,45 @@
 {% extends "profissional_base.html" %}
 {% block title %}Solicitar Acesso | MeuDocMed{% endblock %}
 
+{% block extra_scripts %}
+{% if pending %}
+<script>
+(function () {
+  const checkUrl = "{{ url_for('professional.check_access', patient_id=patient.id) }}";
+  const prontuarioUrl = "{{ url_for('professional.prontuario', patient_id=patient.id) }}";
+  const statusEl = document.getElementById('polling-status');
+
+  let attempts = 0;
+  const MAX_ATTEMPTS = 120; // 10 minutos (a cada 5s)
+
+  function poll() {
+    if (attempts >= MAX_ATTEMPTS) return;
+    attempts++;
+
+    fetch(checkUrl, { credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.status === 'active') {
+          if (statusEl) statusEl.innerHTML =
+            '<i class="fa fa-circle-check"></i> Acesso aprovado! Abrindo prontuário…';
+          setTimeout(() => { window.location.href = data.redirect || prontuarioUrl; }, 800);
+        } else if (data.status === 'denied') {
+          if (statusEl) statusEl.innerHTML =
+            '<i class="fa fa-circle-xmark"></i> Acesso recusado pelo paciente.';
+        } else {
+          setTimeout(poll, 5000);
+        }
+      })
+      .catch(() => setTimeout(poll, 8000));
+  }
+
+  // Inicia polling após 3s para dar tempo do DOM carregar
+  setTimeout(poll, 3000);
+})();
+</script>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
   <h1><i class="fa fa-key"></i> Acesso ao Prontuário</h1>
@@ -37,6 +76,9 @@
   <i class="fa fa-clock"></i>
   <strong>Solicitação enviada</strong> — Aguardando aprovação do paciente {{ patient.name }}.
   A solicitação foi feita em {{ pending.requested_at.strftime('%d/%m/%Y às %H:%M') }}.
+  <br><small id="polling-status" style="opacity:.8">
+    <i class="fa fa-spinner fa-spin"></i> Verificando resposta automaticamente…
+  </small>
 </div>
 {% endif %}
 

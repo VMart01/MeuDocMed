@@ -2,6 +2,7 @@
 {% block title %}Login — Paciente | MeuDocMed{% endblock %}
 {% block body_class %}auth-page{% endblock %}
 
+{% block flash_messages %}{% endblock %}
 {% block content %}
 <div class="auth-container">
   <div class="auth-card">
@@ -13,7 +14,17 @@
       <p>Acesse seu prontuário digital</p>
     </div>
 
-    {% include "partials/flash.html" ignore missing %}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="alert alert-{{ category }}">
+            <i class="fa {% if category == 'danger' %}fa-circle-xmark{% elif category == 'success' %}fa-circle-check{% elif category == 'warning' %}fa-triangle-exclamation{% else %}fa-circle-info{% endif %}"></i>
+            {{ message }}
+            <button class="alert-close" onclick="this.parentElement.remove()"><i class="fa fa-xmark"></i></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
 
     <form method="post" class="auth-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

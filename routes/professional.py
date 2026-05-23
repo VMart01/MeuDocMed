@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, session, current_app, send_file, abort)
+                   url_for, flash, session, current_app, send_file, abort, jsonify)
 
 from models import (db, Patient, Professional, Document, AccessRequest,
                     AccessLog, Medication, DOCUMENT_CATEGORIES, ACCESS_DURATIONS)
@@ -310,12 +310,10 @@ def visualizar_documento(patient_id, doc_id):
                f'Profissional {professional.name} visualizou "{doc.name}".',
                professional.id)
 
-    # Sem acesso a download: força visualização inline (se suportado)
+    # Sem acesso a download: redireciona para viewer seguro
     if not access.allow_download:
-        if not inline:
-            flash('Download não permitido pelo paciente.', 'warning')
-            return redirect(url_for('professional.prontuario', patient_id=patient_id))
-        return send_file(file_path, mimetype=mime, as_attachment=False)
+        return redirect(url_for('professional.viewer_documento',
+                                patient_id=patient_id, doc_id=doc_id))
 
     return send_file(file_path, mimetype=mime, as_attachment=not inline,
                      download_name=doc.original_filename if not inline else None)
@@ -501,3 +499,104 @@ def excluir_conta():
     session.clear()
     flash('Sua conta foi excluída permanentemente.', 'info')
     return redirect(url_for('auth.index'))
+
+
+# ---------------------------------------------------------------------------
+# Check Access (polling para auto-redirect)
+# ---------------------------------------------------------------------------
+@professional_bp.route('/paciente/<int:patient_id>/check-access')
+@login_required
+def check_access(patient_id):
+    """Retorna JSON com status do acesso. Usado pelo polling JS na página de solicitação."""
+    professional = get_current_professional()
+
+    active = get_active_access(professional.id, patient_id)
+    if active:
+        return jsonify({'status': 'active',
+                        'redirect': url_for('professional.prontuario',
+                                            patient_id=patient_id)})
+
+    pending = AccessRequest.query.filter_by(
+        professional_id=professional.id,
+        patient_id=patient_id,
+        status='pending',
+    ).first()
+    if pending:
+        return jsonify({'status': 'pending'})
+
+    denied = (AccessRequest.query
+              .filter_by(professional_id=professional.id,
+                         patient_id=patient_id,
+                         status='denied')
+              .order_by(AccessRequest.id.desc())
+              .first())
+    return jsonify({'status': 'denied' if denied else 'none'})
+
+
+# ---------------------------------------------------------------------------
+# Viewer seguro de documento (sem download)
+# ---------------------------------------------------------------------------
+VIEWER_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'txt'}
+
+
+@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/raw')
+@login_required
+def raw_documento(patient_id, doc_id):
+    """Serve os bytes do arquivo inline, com headers que desestimulam download.
+    Usado exclusivamente pelo viewer seguro."""
+    professional = get_current_professional()
+
+    access = get_active_access(professional.id, patient_id)
+    if not access:
+        abort(403)
+
+    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
+    upload_folder = current_app.config['UPLOAD_FOLDER']
+    file_path = os.path.join(upload_folder, doc.filename)
+
+    if not os.path.exists(file_path):
+        abort(404)
+
+    mime = get_mime_type(doc.original_filename)
+    response = send_file(file_path, mimetype=mime, as_attachment=False)
+    response.headers['Content-Disposition'] = 'inline'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+
+
+@professional_bp.route('/paciente/<int:patient_id>/documento/<int:doc_id>/viewer')
+@login_required
+def viewer_documento(patient_id, doc_id):
+    """Página de visualização segura — sem botão de download, sem URL exposta."""
+    professional = get_current_professional()
+    patient = Patient.query.get_or_404(patient_id)
+
+    access = get_active_access(professional.id, patient_id)
+    if not access:
+        flash('Você não tem acesso ativo ao prontuário deste paciente.', 'warning')
+        return redirect(url_for('professional.solicitar_acesso', patient_id=patient_id))
+
+    doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
+    ext = get_extension(doc.original_filename)
+
+    if ext not in VIEWER_EXTENSIONS:
+        flash('Este tipo de arquivo não pode ser visualizado sem permissão de download.', 'warning')
+        return redirect(url_for('professional.prontuario', patient_id=patient_id))
+
+    raw_url = url_for('professional.raw_documento',
+                      patient_id=patient_id, doc_id=doc_id)
+
+    log_access(patient_id, 'view_doc',
+               f'Profissional {professional.name} visualizou "{doc.name}" (somente leitura).',
+               professional.id)
+
+    return render_template('profissional/viewer.html',
+                           professional=professional,
+                           patient=patient,
+                           doc=doc,
+                           access=access,
+                           raw_url=raw_url,
+                           ext=ext,
+                           patient_id=patient_id)

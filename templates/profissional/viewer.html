@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visualizar — {{ doc.name }} | MeuDocMed</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #111827;
+      color: #f3f4f6;
+      min-height: 100vh;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Barra superior */
+    #topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      background: #1f2937;
+      border-bottom: 1px solid #374151;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 0 16px;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.4);
+    }
+
+    #topbar .brand {
+      font-weight: 700;
+      color: #3b82f6;
+      font-size: .95rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+
+    #topbar .doc-name {
+      flex: 1;
+      font-size: .85rem;
+      color: #9ca3af;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #topbar .badge-readonly {
+      background: #78350f;
+      color: #fde68a;
+      font-size: .72rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+
+    #topbar .btn-back {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #374151;
+      color: #d1d5db;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: .84rem;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background .15s;
+    }
+    #topbar .btn-back:hover { background: #4b5563; }
+
+    /* Área de navegação PDF */
+    #pdf-nav {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1f2937cc;
+      backdrop-filter: blur(6px);
+      border: 1px solid #374151;
+      border-radius: 30px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      z-index: 100;
+    }
+    #pdf-nav button {
+      background: #374151;
+      border: none;
+      color: #d1d5db;
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: .85rem;
+      transition: background .15s;
+    }
+    #pdf-nav button:hover:not(:disabled) { background: #4b5563; }
+    #pdf-nav button:disabled { opacity: .35; cursor: default; }
+    #pdf-nav #page-info { font-size: .84rem; color: #9ca3af; min-width: 80px; text-align: center; }
+
+    /* Conteúdo principal */
+    #viewer-area {
+      padding-top: 68px;
+      padding-bottom: 80px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* PDF: páginas */
+    .pdf-page-canvas {
+      display: block;
+      max-width: 100%;
+      margin: 10px auto;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
+      background: #fff;
+    }
+
+    /* Imagem */
+    #img-canvas {
+      max-width: 96vw;
+      max-height: calc(100vh - 90px);
+      object-fit: contain;
+      box-shadow: 0 4px 20px rgba(0,0,0,.6);
+      margin-top: 12px;
+    }
+
+    /* Texto */
+    #txt-pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      border-radius: 8px;
+      padding: 24px;
+      margin: 12px;
+      width: calc(100% - 24px);
+      max-width: 860px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'Courier New', monospace;
+      font-size: .88rem;
+      line-height: 1.6;
+      box-shadow: 0 4px 20px rgba(0,0,0,.4);
+    }
+
+    /* Loading */
+    #loading {
+      margin-top: 80px;
+      text-align: center;
+      color: #6b7280;
+    }
+    #loading .spinner {
+      font-size: 2.5rem;
+      color: #3b82f6;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading p { margin-top: 12px; font-size: .9rem; }
+
+    /* Erro */
+    #error-msg {
+      display: none;
+      margin: 80px auto;
+      max-width: 480px;
+      background: #7f1d1d;
+      border: 1px solid #dc2626;
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Barra superior -->
+<div id="topbar">
+  <span class="brand"><i class="fa fa-file-medical"></i> MeuDocMed</span>
+  <span class="doc-name">{{ doc.name }}</span>
+  <span class="badge-readonly"><i class="fa fa-eye"></i> Somente leitura</span>
+  <a href="{{ url_for('professional.prontuario', patient_id=patient_id) }}" class="btn-back">
+    <i class="fa fa-arrow-left"></i> Voltar
+  </a>
+</div>
+
+<!-- Navegação PDF -->
+<div id="pdf-nav">
+  <button id="btn-first" onclick="goToPage(1)" title="Primeira página"><i class="fa fa-backward-step"></i></button>
+  <button id="btn-prev" onclick="goToPage(currentPage - 1)"><i class="fa fa-chevron-left"></i> Ant.</button>
+  <span id="page-info">—</span>
+  <button id="btn-next" onclick="goToPage(currentPage + 1)">Próx. <i class="fa fa-chevron-right"></i></button>
+  <button id="btn-last" onclick="goToPage(totalPages)" title="Última página"><i class="fa fa-forward-step"></i></button>
+</div>
+
+<!-- Área de conteúdo -->
+<div id="viewer-area">
+  <div id="loading">
+    <div class="spinner"><i class="fa fa-spinner"></i></div>
+    <p>Carregando documento…</p>
+  </div>
+  <div id="error-msg">
+    <i class="fa fa-circle-exclamation" style="font-size:2rem;color:#f87171"></i>
+    <p style="margin-top:12px">Não foi possível carregar o documento.</p>
+  </div>
+</div>
+
+<!-- Bloqueia atalhos de teclado e menu de contexto -->
+<script>
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && ['s', 'p', 'u', 'a'].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+    }
+  });
+</script>
+
+{% set ext = ext|lower %}
+
+<!-- ===== PDF ===== -->
+{% if ext == 'pdf' %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  const RAW_URL = {{ raw_url | tojson }};
+  const area    = document.getElementById('viewer-area');
+  const loading = document.getElementById('loading');
+  const navBar  = document.getElementById('pdf-nav');
+  const pageInfo = document.getElementById('page-info');
+
+  let pdfDoc    = null;
+  let currentPage = 1;
+  let totalPages  = 0;
+  const pageCanvases = {};
+
+  async function renderPage(num) {
+    if (pageCanvases[num]) return;
+    const page = await pdfDoc.getPage(num);
+    const scale = Math.min(1.6, (window.innerWidth - 32) / page.getViewport({ scale: 1 }).width);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'pdf-page-canvas';
+    canvas.width  = viewport.width;
+    canvas.height = viewport.height;
+    canvas.id     = `page-${num}`;
+    area.appendChild(canvas);
+
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+    pageCanvases[num] = canvas;
+  }
+
+  function goToPage(num) {
+    if (!pdfDoc || num < 1 || num > totalPages) return;
+    currentPage = num;
+    pageInfo.textContent = `Página ${currentPage} / ${totalPages}`;
+    document.getElementById(`page-${num}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('btn-prev').disabled  = currentPage <= 1;
+    document.getElementById('btn-next').disabled  = currentPage >= totalPages;
+    document.getElementById('btn-first').disabled = currentPage <= 1;
+    document.getElementById('btn-last').disabled  = currentPage >= totalPages;
+  }
+
+  (async () => {
+    try {
+      const resp = await fetch(RAW_URL, { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error('fetch failed');
+      const buf = await resp.arrayBuffer();
+
+      pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+      totalPages = pdfDoc.numPages;
+
+      loading.style.display = 'none';
+      navBar.style.display  = totalPages > 1 ? 'flex' : 'none';
+
+      // Renderiza todas as páginas
+      for (let i = 1; i <= totalPages; i++) {
+        await renderPage(i);
+      }
+
+      goToPage(1);
+
+      // Atualiza página atual ao rolar
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) {
+            const num = parseInt(e.target.id.replace('page-', ''));
+            if (num !== currentPage) goToPage(num);
+          }
+        });
+      }, { threshold: 0.5 });
+
+      Object.values(pageCanvases).forEach(c => observer.observe(c));
+    } catch (err) {
+      loading.style.display = 'none';
+      document.getElementById('error-msg').style.display = 'block';
+    }
+  })();
+</script>
+
+<!-- ===== IMAGEM ===== -->
+{% elif ext in ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'] %}
+<script>
+  const RAW_URL = {{ raw_url | tojson }};
+  const loading = document.getElementById('loading');
+  const area    = document.getElementById('viewer-area');
+
+  (async () => {
+    try {
+      const resp = await fetch(RAW_URL, { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error();
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.id = 'img-canvas';
+
+        // Escala para caber na tela mantendo proporção
+        const maxW = window.innerWidth * 0.94;
+        const maxH = window.innerHeight - 90;
+        const ratio = Math.min(1, maxW / img.naturalWidth, maxH / img.naturalHeight);
+        canvas.width  = img.naturalWidth  * ratio;
+        canvas.height = img.naturalHeight * ratio;
+
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(blobUrl); // descarta blob URL imediatamente
+
+        loading.style.display = 'none';
+        area.appendChild(canvas);
+      };
+      img.onerror = () => { throw new Error(); };
+      img.src = blobUrl;
+    } catch {
+      loading.style.display = 'none';
+      document.getElementById('error-msg').style.display = 'block';
+    }
+  })();
+</script>
+
+<!-- ===== TEXTO ===== -->
+{% elif ext == 'txt' %}
+<script>
+  const RAW_URL = {{ raw_url | tojson }};
+  const loading = document.getElementById('loading');
+  const area    = document.getElementById('viewer-area');
+
+  (async () => {
+    try {
+      const resp = await fetch(RAW_URL, { credentials: 'same-origin' });
+      if (!resp.ok) throw new Error();
+      const text = await resp.text();
+
+      const pre = document.createElement('pre');
+      pre.id = 'txt-pre';
+      pre.textContent = text;
+
+      loading.style.display = 'none';
+      area.appendChild(pre);
+    } catch {
+      loading.style.display = 'none';
+      document.getElementById('error-msg').style.display = 'block';
+    }
+  })();
+</script>
+{% endif %}
+
+</body>
+</html>
