@@ -1,45 +1,6 @@
 {% extends "profissional_base.html" %}
 {% block title %}Solicitar Acesso | MeuDocMed{% endblock %}
 
-{% block extra_scripts %}
-{% if pending %}
-<script>
-(function () {
-  const checkUrl = "{{ url_for('professional.check_access', patient_id=patient.id) }}";
-  const prontuarioUrl = "{{ url_for('professional.prontuario', patient_id=patient.id) }}";
-  const statusEl = document.getElementById('polling-status');
-
-  let attempts = 0;
-  const MAX_ATTEMPTS = 120; // 10 minutos (a cada 5s)
-
-  function poll() {
-    if (attempts >= MAX_ATTEMPTS) return;
-    attempts++;
-
-    fetch(checkUrl, { credentials: 'same-origin' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.status === 'active') {
-          if (statusEl) statusEl.innerHTML =
-            '<i class="fa fa-circle-check"></i> Acesso aprovado! Abrindo prontuário…';
-          setTimeout(() => { window.location.href = data.redirect || prontuarioUrl; }, 800);
-        } else if (data.status === 'denied') {
-          if (statusEl) statusEl.innerHTML =
-            '<i class="fa fa-circle-xmark"></i> Acesso recusado pelo paciente.';
-        } else {
-          setTimeout(poll, 5000);
-        }
-      })
-      .catch(() => setTimeout(poll, 8000));
-  }
-
-  // Inicia polling após 3s para dar tempo do DOM carregar
-  setTimeout(poll, 3000);
-})();
-</script>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 <div class="page-header">
   <h1><i class="fa fa-key"></i> Acesso ao Prontuário</h1>
@@ -72,7 +33,7 @@
 </div>
 
 {% if pending %}
-<div class="alert alert-info">
+<div class="alert alert-info" id="pending-alert">
   <i class="fa fa-clock"></i>
   <strong>Solicitação enviada</strong> — Aguardando aprovação do paciente {{ patient.name }}.
   A solicitação foi feita em {{ pending.requested_at.strftime('%d/%m/%Y às %H:%M') }}.
@@ -169,4 +130,50 @@
     </div>
   </div>
 </div>
+
+{% if pending %}
+<script>
+(function () {
+  var CHECK_URL    = {{ url_for('professional.check_access', patient_id=patient.id) | tojson }};
+  var REDIRECT_URL = {{ url_for('professional.prontuario',   patient_id=patient.id) | tojson }};
+  var statusEl     = document.getElementById('polling-status');
+  var attempts     = 0;
+  var MAX_ATTEMPTS = 300; // 10 min a cada 2s
+
+  function setStatus(html) {
+    if (statusEl) statusEl.innerHTML = html;
+  }
+
+  function poll() {
+    if (attempts >= MAX_ATTEMPTS) {
+      setStatus('<i class="fa fa-clock"></i> Tempo de verificação esgotado. Atualize a página.');
+      return;
+    }
+    attempts++;
+
+    fetch(CHECK_URL, { credentials: 'same-origin' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.status === 'active') {
+          setStatus('<i class="fa fa-circle-check"></i> Acesso aprovado! Abrindo prontuário…');
+          setTimeout(function() {
+            window.location.href = data.redirect || REDIRECT_URL;
+          }, 600);
+        } else if (data.status === 'denied') {
+          setStatus('<i class="fa fa-circle-xmark"></i> Acesso recusado pelo paciente.');
+          var alert = document.getElementById('pending-alert');
+          if (alert) alert.className = 'alert alert-danger';
+        } else {
+          setTimeout(poll, 2000);
+        }
+      })
+      .catch(function() { setTimeout(poll, 4000); });
+  }
+
+  // Primeira verificação após 1s
+  setTimeout(poll, 1000);
+})();
+</script>
+{% endif %}
+
 {% endblock %}
