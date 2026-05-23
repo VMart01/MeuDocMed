@@ -2,6 +2,7 @@
 MeuDocMed — Aplicação Flask principal.
 """
 import os
+from datetime import datetime
 from flask import Flask, render_template, send_from_directory
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -41,6 +42,11 @@ def create_app(config_name: str = None) -> Flask:
     app.register_blueprint(patient_bp)
     app.register_blueprint(professional_bp)
     app.register_blueprint(share_bp)
+
+    # Injeta `now` em todos os templates (para usar {{ now.year }}, etc.)
+    @app.context_processor
+    def inject_now():
+        return {'now': datetime.utcnow()}
 
     # Cria tabelas se não existirem
     with app.app_context():
