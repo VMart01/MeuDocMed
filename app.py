@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, send_from_directory
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
 from config import config
@@ -23,6 +24,9 @@ def create_app(config_name: str = None) -> Flask:
 
     app = Flask(__name__)
     app.config.from_object(config[config_name])
+
+    # Render usa proxy reverso — necessário para HTTPS, IPs reais e CSRF correto
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
     # Inicializa extensões
     db.init_app(app)
