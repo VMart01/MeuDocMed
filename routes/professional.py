@@ -258,6 +258,7 @@ def prontuario(patient_id):
 
     docs = query.all()
     meds_ativos = patient.medications.filter_by(is_active=True).all()
+    all_meds = patient.medications.order_by(Medication.created_at.desc()).all()
 
     # Estatísticas
     all_docs = patient.documents.all()
@@ -275,7 +276,9 @@ def prontuario(patient_id):
                            patient=patient,
                            access=access,
                            docs=docs,
+                           all_docs=all_docs,
                            meds_ativos=meds_ativos,
+                           all_meds=all_meds,
                            cat_stats=cat_stats,
                            categories=DOCUMENT_CATEGORIES,
                            selected_category=category,
@@ -628,14 +631,11 @@ def viewer_documento(patient_id, doc_id):
     professional = get_current_professional()
     if not get_active_access(professional.id, patient_id):
         abort(403)
-
     doc = Document.query.filter_by(id=doc_id, patient_id=patient_id).first_or_404()
     ext = get_extension(doc.original_filename)
-
     pdf_info_url = url_for('professional.pdf_info', patient_id=patient_id, doc_id=doc_id)
     pdf_page_url = url_for('professional.pdf_page', patient_id=patient_id,
                            doc_id=doc_id, page_num=0).replace('/0', '/PAGE_NUM')
-
     return render_template('profissional/viewer.html',
                            doc=doc,
                            patient_id=patient_id,

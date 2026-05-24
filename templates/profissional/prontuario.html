@@ -78,12 +78,20 @@
 </div>
 
 <!-- Documentos -->
-<div class="section-header">
+<div class="section-header" style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:.5rem;">
   <h2><i class="fa fa-file-medical"></i> Documentos</h2>
+  <div class="view-toggle-group">
+    <button id="btn-view-grid" class="btn btn-sm btn-primary" onclick="setView('grid')" title="Visualização em grade">
+      <i class="fa fa-grip"></i> Grade
+    </button>
+    <button id="btn-view-timeline" class="btn btn-sm btn-outline" onclick="setView('timeline')" title="Linha do tempo">
+      <i class="fa fa-timeline"></i> Linha do Tempo
+    </button>
+  </div>
 </div>
 
-<!-- Filtros -->
-<div class="filter-bar">
+<!-- Filtros (visíveis só na grade) -->
+<div class="filter-bar" id="filter-bar-grid">
   <form method="get" class="filter-form">
     <div class="filter-tabs">
       <a href="{{ url_for('professional.prontuario', patient_id=patient.id) }}"
@@ -107,56 +115,95 @@
   </form>
 </div>
 
-{% if docs %}
-  <div class="doc-grid">
-    {% for doc in docs %}
-      <div class="doc-card">
-        <div class="doc-card-icon">
-          {% if doc.extension == 'pdf' %}<i class="fa fa-file-pdf"></i>
-          {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}<i class="fa fa-file-image"></i>
-          {% elif doc.extension in ['doc','docx'] %}<i class="fa fa-file-word"></i>
-          {% elif doc.extension in ['xls','xlsx'] %}<i class="fa fa-file-excel"></i>
-          {% else %}<i class="fa fa-file-lines"></i>{% endif %}
-        </div>
-        <div class="doc-card-body">
-          <h3 class="doc-card-name">{{ doc.name }}</h3>
-          <div class="doc-card-meta">
-            <span class="badge badge-cat">{{ doc.category_display }}</span>
-            <span class="doc-size">{{ doc.file_size_display }}</span>
+<!-- GRADE -->
+<div id="view-grid">
+  {% if docs %}
+    <div class="doc-grid">
+      {% for doc in docs %}
+        <div class="doc-card">
+          <div class="doc-card-icon">
+            {% if doc.extension == 'pdf' %}<i class="fa fa-file-pdf"></i>
+            {% elif doc.extension in ['png','jpg','jpeg','gif','bmp','webp'] %}<i class="fa fa-file-image"></i>
+            {% elif doc.extension in ['doc','docx'] %}<i class="fa fa-file-word"></i>
+            {% elif doc.extension in ['xls','xlsx'] %}<i class="fa fa-file-excel"></i>
+            {% else %}<i class="fa fa-file-lines"></i>{% endif %}
           </div>
-          <div class="doc-card-date">
-            <i class="fa fa-calendar"></i> {{ doc.created_at.strftime('%d/%m/%Y') }}
-            {% if doc.uploaded_by_professional_id %}
-              <span class="badge badge-prof"><i class="fa fa-stethoscope"></i> Prof.</span>
+          <div class="doc-card-body">
+            <h3 class="doc-card-name">{{ doc.name }}</h3>
+            <div class="doc-card-meta">
+              <span class="badge badge-cat">{{ doc.category_display }}</span>
+              <span class="doc-size">{{ doc.file_size_display }}</span>
+            </div>
+            <div class="doc-card-date">
+              <i class="fa fa-calendar"></i> {{ doc.created_at.strftime('%d/%m/%Y') }}
+              {% if doc.uploaded_by_professional_id %}
+                <span class="badge badge-prof"><i class="fa fa-stethoscope"></i> Prof.</span>
+              {% endif %}
+            </div>
+            {% if doc.observation %}<p class="doc-observation">{{ doc.observation }}</p>{% endif %}
+          </div>
+          <div class="doc-card-actions">
+            <a href="{{ url_for('professional.visualizar_documento', patient_id=patient.id, doc_id=doc.id) }}"
+               target="_blank" class="btn btn-sm btn-outline">
+              <i class="fa fa-eye"></i> Ver
+            </a>
+            {% if access.allow_download %}
+              <a href="{{ url_for('professional.download_documento', patient_id=patient.id, doc_id=doc.id) }}"
+                 class="btn btn-sm btn-outline">
+                <i class="fa fa-download"></i>
+              </a>
             {% endif %}
           </div>
-          {% if doc.observation %}<p class="doc-observation">{{ doc.observation }}</p>{% endif %}
         </div>
-        <div class="doc-card-actions">
-          <a href="{{ url_for('professional.visualizar_documento', patient_id=patient.id, doc_id=doc.id) }}"
-             target="_blank" class="btn btn-sm btn-outline">
-            <i class="fa fa-eye"></i> Ver
-          </a>
-          {% if access.allow_download %}
-            <a href="{{ url_for('professional.download_documento', patient_id=patient.id, doc_id=doc.id) }}"
-               class="btn btn-sm btn-outline">
-              <i class="fa fa-download"></i>
-            </a>
-          {% endif %}
-        </div>
-      </div>
-    {% endfor %}
-  </div>
-{% else %}
-  <div class="empty-state">
-    <i class="fa fa-folder-open"></i>
-    <h2>Nenhum documento encontrado</h2>
-  </div>
-{% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <i class="fa fa-folder-open"></i>
+      <h2>Nenhum documento encontrado</h2>
+    </div>
+  {% endif %}
+</div>
+
+<!-- LINHA DO TEMPO -->
+<div id="view-timeline" style="display:none;">
+  <div id="timeline-container"></div>
+</div>
+
+
+<!-- Dados para a timeline (JSON) -->
+<script id="timeline-docs-data" type="application/json">
+[{% for doc in all_docs %}{
+  "id": {{ doc.id }},
+  "name": {{ doc.name | tojson }},
+  "category": {{ doc.category_display | tojson }},
+  "category_key": {{ doc.category | tojson }},
+  "date": "{{ doc.created_at.strftime('%Y-%m-%d') }}",
+  "date_display": "{{ doc.created_at.strftime('%d/%m/%Y') }}",
+  "ext": {{ doc.extension | tojson }},
+  "size": {{ doc.file_size_display | tojson }},
+  "observation": {{ (doc.observation or '') | tojson }},
+  "by_prof": {{ (doc.uploaded_by_professional_id is not none) | tojson }},
+  "view_url": {{ url_for('professional.visualizar_documento', patient_id=patient.id, doc_id=doc.id) | tojson }}
+  {% if access.allow_download %},"dl_url": {{ url_for('professional.download_documento', patient_id=patient.id, doc_id=doc.id) | tojson }}{% endif %}
+}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
+<script id="timeline-meds-data" type="application/json">
+[{% for med in all_meds %}{
+  "name": {{ med.name | tojson }},
+  "dose": {{ (med.dose or '') | tojson }},
+  "frequency": {{ (med.frequency or '') | tojson }},
+  "route": {{ (med.route_display or '') | tojson }},
+  "prescriber": {{ (med.prescriber or '') | tojson }},
+  "is_active": {{ med.is_active | tojson }},
+  "date": "{{ med.start_date.strftime('%Y-%m-%d') if med.start_date else med.created_at.strftime('%Y-%m-%d') }}",
+  "date_display": "{{ med.start_date.strftime('%d/%m/%Y') if med.start_date else med.created_at.strftime('%d/%m/%Y') }}"
+}{% if not loop.last %},{% endif %}{% endfor %}]
+</script>
 
 {% block extra_scripts %}
 <script>
-// Countdown do acesso
+// ── Countdown do acesso ───────────────────────────────────────────────────
 const expiresAt = new Date("{{ access.expires_at.strftime('%Y-%m-%dT%H:%M:%S') }}Z");
 function updateTimer() {
   const now = new Date();
@@ -174,6 +221,133 @@ function updateTimer() {
 }
 updateTimer();
 setInterval(updateTimer, 1000);
+
+// ── Toggle de visualização ────────────────────────────────────────────────
+function setView(v) {
+  const isGrid = v === 'grid';
+  document.getElementById('view-grid').style.display = isGrid ? '' : 'none';
+  document.getElementById('view-timeline').style.display = isGrid ? 'none' : '';
+  document.getElementById('filter-bar-grid').style.display = isGrid ? '' : 'none';
+  document.getElementById('btn-view-grid').className = 'btn btn-sm ' + (isGrid ? 'btn-primary' : 'btn-outline');
+  document.getElementById('btn-view-timeline').className = 'btn btn-sm ' + (isGrid ? 'btn-outline' : 'btn-primary');
+  localStorage.setItem('prontuario_view_{{ patient.id }}', v);
+  if (v === 'timeline' && !window._timelineBuilt) buildTimeline();
+}
+
+// ── Restaurar preferência salva ───────────────────────────────────────────
+const savedView = localStorage.getItem('prontuario_view_{{ patient.id }}');
+if (savedView === 'timeline') setView('timeline');
+
+// ── Cores por categoria ───────────────────────────────────────────────────
+const CAT_COLORS = {
+  'exame_lab':  { bg: '#e3f2fd', border: '#1565c0', icon: 'fa-flask' },
+  'exame_img':  { bg: '#f3e5f5', border: '#6a1b9a', icon: 'fa-x-ray' },
+  'relatorio':  { bg: '#e8f5e9', border: '#2e7d32', icon: 'fa-file-lines' },
+  'receita':    { bg: '#fff3e0', border: '#e65100', icon: 'fa-prescription' },
+  'laudo':      { bg: '#fce4ec', border: '#c62828', icon: 'fa-file-medical' },
+  'vacina':     { bg: '#e0f2f1', border: '#00695c', icon: 'fa-syringe' },
+  'internacao': { bg: '#fbe9e7', border: '#bf360c', icon: 'fa-hospital' },
+  'cirurgia':   { bg: '#efebe9', border: '#4e342e', icon: 'fa-scalpel' },
+  'outro':      { bg: '#f5f5f5', border: '#616161', icon: 'fa-file' },
+};
+
+// ── Construção da timeline ────────────────────────────────────────────────
+function buildTimeline() {
+  window._timelineBuilt = true;
+  const docs = JSON.parse(document.getElementById('timeline-docs-data').textContent);
+  const meds = JSON.parse(document.getElementById('timeline-meds-data').textContent);
+
+  const events = [];
+  docs.forEach(d => events.push({ type: 'doc', date: d.date, data: d }));
+  meds.forEach(m => events.push({ type: 'med', date: m.date, data: m }));
+  events.sort((a, b) => b.date.localeCompare(a.date));
+
+  if (events.length === 0) {
+    document.getElementById('timeline-container').innerHTML =
+      '<div class="empty-state"><i class="fa fa-timeline"></i><h2>Nenhum evento registrado</h2></div>';
+    return;
+  }
+
+  const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                      'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const groups = {};
+  events.forEach(ev => {
+    const [y, mo] = ev.date.split('-');
+    const key = `${y}-${mo}`;
+    const label = `${monthNames[parseInt(mo)-1]} de ${y}`;
+    if (!groups[key]) groups[key] = { label, events: [] };
+    groups[key].events.push(ev);
+  });
+
+  let html = '<div class="tl-wrap">';
+  Object.keys(groups).sort((a,b) => b.localeCompare(a)).forEach(key => {
+    const g = groups[key];
+    html += `<div class="tl-month-group">
+      <div class="tl-month-label"><i class="fa fa-calendar-days"></i> ${g.label}</div>
+      <div class="tl-events">`;
+
+    g.events.forEach(ev => {
+      if (ev.type === 'doc') {
+        const d = ev.data;
+        const c = CAT_COLORS[d.category_key] || CAT_COLORS['outro'];
+        const extIcon = d.ext === 'pdf' ? 'fa-file-pdf' :
+                        ['png','jpg','jpeg','gif','bmp','webp'].includes(d.ext) ? 'fa-file-image' :
+                        ['doc','docx'].includes(d.ext) ? 'fa-file-word' : 'fa-file-lines';
+        html += `<div class="tl-event tl-event-doc" style="--tl-border:${c.border}; --tl-bg:${c.bg}">
+          <div class="tl-event-dot" style="background:${c.border}">
+            <i class="fa ${c.icon}"></i>
+          </div>
+          <div class="tl-event-body">
+            <div class="tl-event-header">
+              <span class="tl-event-title"><i class="fa ${extIcon}"></i> ${escHtml(d.name)}</span>
+              <span class="tl-event-date">${d.date_display}</span>
+            </div>
+            <div class="tl-event-meta">
+              <span class="badge badge-cat">${escHtml(d.category)}</span>
+              <span class="tl-event-size">${escHtml(d.size)}</span>
+              ${d.by_prof ? '<span class="badge badge-prof"><i class="fa fa-stethoscope"></i> Prof.</span>' : ''}
+            </div>
+            ${d.observation ? `<p class="tl-event-obs">${escHtml(d.observation)}</p>` : ''}
+            <div class="tl-event-actions">
+              <a href="${d.view_url}" target="_blank" class="btn btn-xs btn-outline">
+                <i class="fa fa-eye"></i> Ver
+              </a>
+              ${d.dl_url ? `<a href="${d.dl_url}" class="btn btn-xs btn-outline"><i class="fa fa-download"></i></a>` : ''}
+            </div>
+          </div>
+        </div>`;
+      } else {
+        const m = ev.data;
+        html += `<div class="tl-event tl-event-med">
+          <div class="tl-event-dot tl-dot-med">
+            <i class="fa fa-pills"></i>
+          </div>
+          <div class="tl-event-body">
+            <div class="tl-event-header">
+              <span class="tl-event-title"><i class="fa fa-pills"></i> ${escHtml(m.name)}</span>
+              <span class="tl-event-date">${m.date_display}</span>
+            </div>
+            <div class="tl-event-meta">
+              ${m.dose ? `<span class="tl-med-chip">${escHtml(m.dose)}</span>` : ''}
+              ${m.frequency ? `<span class="tl-med-chip">${escHtml(m.frequency)}</span>` : ''}
+              ${m.route ? `<span class="tl-med-chip">${escHtml(m.route)}</span>` : ''}
+              ${!m.is_active ? '<span class="tl-med-chip tl-chip-inactive">Encerrado</span>' : '<span class="tl-med-chip tl-chip-active">Ativo</span>'}
+            </div>
+            ${m.prescriber ? `<p class="tl-event-obs"><i class="fa fa-user-doctor"></i> Prescritor: ${escHtml(m.prescriber)}</p>` : ''}
+          </div>
+        </div>`;
+      }
+    });
+
+    html += '</div></div>';
+  });
+  html += '</div>';
+  document.getElementById('timeline-container').innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 </script>
 {% endblock %}
 {% endblock %}
