@@ -19,23 +19,26 @@ csrf = CSRFProtect()
 
 
 def _migrate_columns(database):
-    """Adiciona colunas novas em tabelas existentes sem destruir dados."""
-    migrations = [
-        # patients
-        ('patients',   'govbr_verified', 'BOOLEAN DEFAULT FALSE'),
-        # documents
-        ('documents',  'storage_type',   "VARCHAR(20) DEFAULT 'local'"),
-        ('documents',  'storage_meta',   'TEXT'),
-        ('documents',  'shard3_hex',     'TEXT'),
-        # professionals
-        ('professionals', 'registration_verified', 'BOOLEAN DEFAULT FALSE'),
+    """Sincroniza schema sem destruir dados."""
+    add_cols = [
+        ('patients',      'govbr_verified',        'BOOLEAN DEFAULT FALSE'),
+        ('documents',     'storage_type',           "VARCHAR(20) DEFAULT 'local'"),
+        ('documents',     'storage_meta',           'TEXT'),
+        ('professionals', 'registration_verified',  'BOOLEAN DEFAULT FALSE'),
+    ]
+    drop_cols = [
+        ('documents', 'shard3_hex'),
     ]
     with database.engine.connect() as conn:
-        for table, column, col_def in migrations:
+        for table, col, col_def in add_cols:
             try:
-                conn.execute(database.text(
-                    f'ALTER TABLE {table} ADD COLUMN {column} {col_def}'
-                ))
+                conn.execute(database.text(f'ALTER TABLE {table} ADD COLUMN {col} {col_def}'))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+        for table, col in drop_cols:
+            try:
+                conn.execute(database.text(f'ALTER TABLE {table} DROP COLUMN IF EXISTS {col}'))
                 conn.commit()
             except Exception:
                 conn.rollback()

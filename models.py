@@ -142,8 +142,7 @@ class Document(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     storage_type = db.Column(db.String(20), default='local')     # 'local', 'cloudinary', 'shamir'
-    storage_meta = db.Column(db.Text, nullable=True)             # JSON: file_id, nonce_hex, ext
-    shard3_hex   = db.Column(db.Text, nullable=True)             # shard 3 salvo no PostgreSQL
+    storage_meta = db.Column(db.Text, nullable=True)             # JSON: file_id, nonce_hex, salt_hex, ext
 
     uploader_professional = db.relationship('Professional', foreign_keys=[uploaded_by_professional_id])
 

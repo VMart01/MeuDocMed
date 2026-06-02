@@ -19,6 +19,7 @@ from utils.file_utils import (allowed_extension, validate_magic_number,
                                generate_unique_filename, get_mime_type,
                                is_viewable_inline, get_extension)
 from utils import storage
+import storage_shamir
 from utils.notifications import sse_stream
 from utils.pdf_utils import generate_history_pdf
 
@@ -59,6 +60,20 @@ def log_action(patient_id, action, description='', professional_id=None,
     )
     db.session.add(log)
     db.session.commit()
+
+
+def _get_doc_bytes(doc, upload_folder):
+    """Recupera bytes do documento respeitando storage_type."""
+    if doc.storage_type == 'shamir' and doc.storage_meta:
+        try:
+            import json as _json
+            meta = _json.loads(doc.storage_meta)
+            return storage_shamir.download_shamir(
+                meta['file_id'], meta['ext'], meta['nonce_hex'], meta['salt_hex'])
+        except Exception:
+            return None
+    return storage.get_file_bytes(doc.filename, upload_folder)
+
 
 
 # ---------------------------------------------------------------------------
@@ -205,24 +220,52 @@ def upload_documento():
                 errors.append('Arquivo excede o limite de 16 MB.')
 
             if not errors:
-                stored_id = storage.upload_file(file_bytes, file.filename)
+                # Shamir se todas as clouds estiverem configuradas; senão Cloudinary/local
+                if storage_shamir.shamir_configured():
+                    result = storage_shamir.upload_shamir(file_bytes, file.filename)
+                    if result is None:
+                        errors.append('Falha ao armazenar o arquivo nas clouds. Tente novamente.')
+                    else:
+                        meta = json.dumps({
+                            'file_id':   result['file_id'],
+                            'ext':       result['ext'],
+                            'nonce_hex': result['nonce_hex'],
+                            'salt_hex':  result['salt_hex'],
+                        })
+                        doc = Document(
+                            patient_id=patient.id,
+                            name=name,
+                            category=category,
+                            filename=result['file_id'],
+                            original_filename=file.filename,
+                            file_size=file_size,
+                            observation=observation or None,
+                            storage_type='shamir',
+                            storage_meta=meta,
+                        )
+                else:
+                    stored_id = storage.upload_file(file_bytes, file.filename)
+                    if not storage._cloudinary_configured():
+                        upload_folder = current_app.config['UPLOAD_FOLDER']
+                        os.makedirs(upload_folder, exist_ok=True)
+                        with open(os.path.join(upload_folder, stored_id), 'wb') as f_out:
+                            f_out.write(file_bytes)
+                    doc = Document(
+                        patient_id=patient.id,
+                        name=name,
+                        category=category,
+                        filename=stored_id,
+                        original_filename=file.filename,
+                        file_size=file_size,
+                        observation=observation or None,
+                        storage_type='cloudinary' if storage._cloudinary_configured() else 'local',
+                    )
 
-                # fallback local: salvar no disco se não usar Cloudinary
-                if not storage._cloudinary_configured():
-                    upload_folder = current_app.config['UPLOAD_FOLDER']
-                    os.makedirs(upload_folder, exist_ok=True)
-                    with open(os.path.join(upload_folder, stored_id), 'wb') as f:
-                        f.write(file_bytes)
-
-                doc = Document(
-                    patient_id=patient.id,
-                    name=name,
-                    category=category,
-                    filename=stored_id,
-                    original_filename=file.filename,
-                    file_size=file_size,
-                    observation=observation or None,
-                )
+                if errors:
+                    for e in errors:
+                        flash(e, 'danger')
+                    return render_template('paciente/upload.html', patient=patient,
+                                           categories=DOCUMENT_CATEGORIES)
                 db.session.add(doc)
                 db.session.flush()
 
@@ -248,8 +291,7 @@ def visualizar_documento(doc_id):
     patient = get_current_patient()
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
-    file_bytes = storage.get_file_bytes(
-        doc.filename, current_app.config['UPLOAD_FOLDER'])
+    file_bytes = _get_doc_bytes(doc, current_app.config['UPLOAD_FOLDER'])
 
     if file_bytes is None:
         flash('Arquivo não encontrado no servidor.', 'danger')
@@ -278,8 +320,7 @@ def download_documento(doc_id):
     patient = get_current_patient()
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
-    file_bytes = storage.get_file_bytes(
-        doc.filename, current_app.config['UPLOAD_FOLDER'])
+    file_bytes = _get_doc_bytes(doc, current_app.config['UPLOAD_FOLDER'])
 
     if file_bytes is None:
         flash('Arquivo não encontrado no servidor.', 'danger')
@@ -338,7 +379,15 @@ def excluir_documento(doc_id):
     doc = Document.query.filter_by(id=doc_id, patient_id=patient.id).first_or_404()
 
     name = doc.name
-    storage.delete_stored_file(doc.filename, current_app.config['UPLOAD_FOLDER'])
+    if doc.storage_type == 'shamir' and doc.storage_meta:
+        import json as _json
+        try:
+            meta = _json.loads(doc.storage_meta)
+            storage_shamir.delete_shamir(meta['file_id'], meta['ext'])
+        except Exception:
+            pass
+    else:
+        storage.delete_stored_file(doc.filename, current_app.config['UPLOAD_FOLDER'])
     db.session.delete(doc)
     db.session.flush()
 
