@@ -22,15 +22,35 @@
       {% endif %}
     {% endwith %}
 
+    <!-- Cadastro rápido via Gov.br -->
+    <a href="{{ url_for('auth.govbr_login') }}" class="btn btn-govbr btn-full" style="margin-bottom:1rem">
+      <svg width="20" height="20" viewBox="0 0 40 40" fill="none" style="flex-shrink:0">
+        <circle cx="20" cy="20" r="20" fill="#fff"/>
+        <text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle"
+              font-size="13" font-weight="700" fill="#1351b4" font-family="sans-serif">gov</text>
+      </svg>
+      Cadastrar e entrar com Gov.br
+      <span class="govbr-badge">CPF verificado automaticamente</span>
+    </a>
+    <div class="auth-separator">ou preencha manualmente</div>
+
     <form method="post" class="auth-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {% if govbr_pending %}
+      <div class="alert alert-info">
+        <i class="fa fa-circle-check"></i>
+        Conta Gov.br verificada! CPF e nome preenchidos automaticamente.
+        Preencha os dados restantes para concluir.
+      </div>
+      {% endif %}
 
       <div class="form-row">
         <div class="form-group form-group-flex">
           <label for="name">Nome Completo *</label>
           <input type="text" id="name" name="name" required
-                 value="{{ form_data.get('name', '') }}"
-                 placeholder="Seu nome completo">
+                 value="{{ form_data.get('name', '') or (govbr_pending.name if govbr_pending else '') }}"
+                 placeholder="Seu nome completo"
+                 {% if govbr_pending %}readonly style="background:#f0fdf4;color:#166534"{% endif %}>
         </div>
         <div class="form-group form-group-flex">
           <label for="birth_date">Data de Nascimento *</label>
@@ -43,8 +63,9 @@
         <div class="form-group form-group-flex">
           <label for="cpf">CPF *</label>
           <input type="text" id="cpf" name="cpf" required
-                 value="{{ form_data.get('cpf', '') }}"
-                 placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+                 value="{{ form_data.get('cpf', '') or (govbr_pending.cpf if govbr_pending else '') }}"
+                 placeholder="000.000.000-00" maxlength="14" inputmode="numeric"
+                 {% if govbr_pending %}readonly style="background:#f0fdf4;color:#166534"{% endif %}>
         </div>
         <div class="form-group form-group-flex">
           <label for="sus_card">Cartão SUS</label>

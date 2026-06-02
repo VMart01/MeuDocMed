@@ -21,6 +21,7 @@ class Patient(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     clinical_notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    govbr_verified = db.Column(db.Boolean, default=False)  # identidade verificada via Gov.br
 
     documents = db.relationship('Document', backref='patient', lazy='dynamic',
                                 cascade='all, delete-orphan')
@@ -86,6 +87,7 @@ class Professional(db.Model):
     email = db.Column(db.String(150), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    registration_verified = db.Column(db.Boolean, default=False)  # registro verificado via API do conselho
 
     access_requests = db.relationship('AccessRequest', backref='professional', lazy='dynamic')
 

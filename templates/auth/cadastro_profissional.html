@@ -51,6 +51,10 @@
           <small class="form-hint" id="reg-hint">
             Use o formato SIGLA/UF-NUMERO (ex: CRM/SP-123456). ACS: use o CPF.
           </small>
+          <small id="council-verify-note" style="display:none;color:#2563eb;margin-top:4px">
+            <i class="fa fa-circle-info"></i>
+            <span id="council-verify-text">Registro será verificado automaticamente ao cadastrar.</span>
+          </small>
         </div>
         <div class="form-group form-group-flex">
           <label for="cpf">CPF *</label>
@@ -119,14 +123,30 @@ const regHints = {
   fisioterapeuta: 'Formato: CREFITO/UF-NUMERO (ex: CREFITO/RS-555666)',
   acs: 'Agentes Comunitários de Saúde devem usar o CPF como identificação.',
 };
+const councilVerifyTexts = {
+  medico:         'CRM será verificado automaticamente na API do CFM ao cadastrar.',
+  enfermeiro:     'COREN será verificado automaticamente na API do COFEN ao cadastrar.',
+  dentista:       'CRO será verificado automaticamente na API do CFO ao cadastrar.',
+  farmaceutico:   'CRF será verificado automaticamente na API do CFF ao cadastrar.',
+  fisioterapeuta: 'CREFITO será verificado automaticamente na API do COFFITO ao cadastrar.',
+};
 function updateRegistrationHint() {
   const sel = document.getElementById('prof_type').value;
   const hint = document.getElementById('reg-hint');
   hint.textContent = regHints[sel] || 'Use o formato SIGLA/UF-NUMERO.';
+  const note = document.getElementById('council-verify-note');
+  const noteText = document.getElementById('council-verify-text');
   if (sel === 'acs') {
     document.getElementById('registration').placeholder = 'Digite seu CPF';
+    if (note) note.style.display = 'none';
   } else {
     document.getElementById('registration').placeholder = 'Ex: CRM/SP-123456';
+    if (note && councilVerifyTexts[sel]) {
+      noteText.textContent = councilVerifyTexts[sel];
+      note.style.display = 'block';
+    } else if (note) {
+      note.style.display = 'none';
+    }
   }
 }
 </script>

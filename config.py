@@ -34,6 +34,15 @@ class Config:
     # Sessão permanente
     PERMANENT_SESSION_LIFETIME = timedelta(hours=8)
 
+    # Gov.br OAuth 2.0 / OpenID Connect
+    # Obtenha as credenciais em: https://www.gov.br/governodigital/pt-br/apis/acesso-gov.br
+    GOVBR_CLIENT_ID     = os.environ.get('GOVBR_CLIENT_ID', '')
+    GOVBR_CLIENT_SECRET = os.environ.get('GOVBR_CLIENT_SECRET', '')
+    GOVBR_REDIRECT_URI  = os.environ.get('GOVBR_REDIRECT_URI', 'http://localhost:5000/auth/govbr/callback')
+    GOVBR_AUTH_URL      = 'https://sso.acesso.gov.br/authorize'
+    GOVBR_TOKEN_URL     = 'https://sso.acesso.gov.br/token'
+    GOVBR_USERINFO_URL  = 'https://sso.acesso.gov.br/userinfo'
+
 
 class DevelopmentConfig(Config):
     DEBUG = True
