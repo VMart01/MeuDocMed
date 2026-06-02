@@ -151,11 +151,14 @@ def documentos():
     else:
         query = query.order_by(Document.created_at.desc())
 
-    docs = query.all()
+    page = request.args.get('page', 1, type=int)
+    per_page = 10
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
 
     return render_template('paciente/documentos.html',
                            patient=patient,
-                           docs=docs,
+                           docs=pagination.items,
+                           pagination=pagination,
                            categories=DOCUMENT_CATEGORIES,
                            selected_category=category,
                            search=search,

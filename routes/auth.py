@@ -5,7 +5,9 @@ logout, recuperação e redefinição de senha, Gov.br OAuth.
 import os
 import secrets
 import base64
+from collections import defaultdict
 from datetime import datetime, timedelta
+from threading import Lock
 
 import requests as http_requests
 from flask import (Blueprint, render_template, request, redirect,
@@ -19,6 +21,44 @@ from utils.validators import (validate_cpf, clean_cpf,
                                verify_council_registration)
 
 auth_bp = Blueprint('auth', __name__)
+
+# ---------------------------------------------------------------------------
+# Rate limiting in-memory: 5 tentativas / 5 min → bloqueio 10 min
+# ---------------------------------------------------------------------------
+_rate_lock = Lock()
+_attempts: dict = defaultdict(list)   # ip -> [datetime, ...]
+_blocked:  dict = {}                  # ip -> datetime de desbloqueio
+
+_MAX_ATTEMPTS = 5
+_WINDOW_SEC   = 300   # 5 min
+_BLOCK_SEC    = 600   # 10 min
+
+
+def _check_rate_limit(ip: str) -> bool:
+    """Retorna True se o IP está bloqueado."""
+    now = datetime.utcnow()
+    with _rate_lock:
+        unblock_at = _blocked.get(ip)
+        if unblock_at:
+            if now < unblock_at:
+                return True
+            else:
+                del _blocked[ip]
+                _attempts[ip] = []
+
+        # limpa tentativas fora da janela
+        _attempts[ip] = [t for t in _attempts[ip]
+                         if (now - t).total_seconds() < _WINDOW_SEC]
+    return False
+
+
+def _register_failed_attempt(ip: str):
+    now = datetime.utcnow()
+    with _rate_lock:
+        _attempts[ip].append(now)
+        if len(_attempts[ip]) >= _MAX_ATTEMPTS:
+            _blocked[ip] = now + timedelta(seconds=_BLOCK_SEC)
+            _attempts[ip] = []
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +176,11 @@ def login_paciente():
         return redirect(url_for('patient.dashboard'))
 
     if request.method == 'POST':
+        ip = get_client_ip()
+        if _check_rate_limit(ip):
+            flash('Muitas tentativas. Aguarde 10 minutos antes de tentar novamente.', 'danger')
+            return render_template('auth/login_paciente.html')
+
         cpf_raw = request.form.get('cpf', '')
         password = request.form.get('password', '')
         cpf = clean_cpf(cpf_raw)
@@ -149,13 +194,14 @@ def login_paciente():
                 patient_id=patient.id,
                 action='login',
                 description='Login realizado com sucesso.',
-                ip_address=get_client_ip(),
+                ip_address=ip,
                 performed_by='patient',
             )
             db.session.add(log)
             db.session.commit()
             return redirect(url_for('patient.dashboard'))
 
+        _register_failed_attempt(ip)
         flash('CPF ou senha incorretos.', 'danger')
         return render_template('auth/login_paciente.html')
 
@@ -264,6 +310,11 @@ def login_profissional():
         return redirect(url_for('professional.portal'))
 
     if request.method == 'POST':
+        ip = get_client_ip()
+        if _check_rate_limit(ip):
+            flash('Muitas tentativas. Aguarde 10 minutos antes de tentar novamente.', 'danger')
+            return render_template('auth/login_profissional.html')
+
         registration = request.form.get('registration', '').strip().upper()
         password = request.form.get('password', '')
 
@@ -272,6 +323,7 @@ def login_profissional():
             login_professional(professional)
             return redirect(url_for('professional.portal'))
 
+        _register_failed_attempt(ip)
         flash('Registro ou senha incorretos.', 'danger')
         return render_template('auth/login_profissional.html')
 

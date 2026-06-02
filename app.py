@@ -3,7 +3,7 @@ MeuDocMed — Aplicação Flask principal.
 """
 import os
 from datetime import datetime
-from flask import Flask, render_template, send_from_directory
+from flask import Flask, render_template, send_from_directory, jsonify, session, abort
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -52,6 +52,15 @@ def create_app(config_name: str = None) -> Flask:
     def inject_now():
         return {'now': datetime.utcnow()}
 
+    # Filtro Jinja: formatar datas no padrão brasileiro
+    @app.template_filter('formatar_data')
+    def formatar_data(value):
+        if value is None:
+            return ''
+        if hasattr(value, 'strftime'):
+            return value.strftime('%d/%m/%Y')
+        return str(value)
+
     # Cria tabelas se não existirem
     with app.app_context():
         db.create_all()
@@ -61,6 +70,14 @@ def create_app(config_name: str = None) -> Flask:
     def service_worker():
         return send_from_directory(app.static_folder, 'sw.js',
                                    mimetype='application/javascript')
+
+    # Diagnóstico de clouds — apenas para sessão ativa
+    @app.route('/admin/clouds_status')
+    def clouds_status():
+        if not session.get('user_type'):
+            abort(403)
+        from storage_shamir import clouds_status as _status
+        return jsonify(_status())
 
     # Handlers de erro
     @app.errorhandler(404)
