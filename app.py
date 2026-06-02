@@ -18,25 +18,37 @@ mail = Mail()
 csrf = CSRFProtect()
 
 
-def create_app(config_name: str = None) -> Flask:
+def _migrate_columns(database):
+    """Adiciona colunas novas em tabelas existentes sem destruir dados."""
+    migrations = [
+        ('documents', 'storage_type', "VARCHAR(20) DEFAULT 'local'"),
+        ('documents', 'storage_meta', 'TEXT'),
+        ('documents', 'shard3_hex',   'TEXT'),
+    ]
+    with database.engine.connect() as conn:
+        for table, column, col_def in migrations:
+            try:
+                conn.execute(database.text(f'ALTER TABLE {table} ADD COLUMN {column} {col_def}'))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
+
+def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get('FLASK_ENV', 'default')
 
     app = Flask(__name__)
     app.config.from_object(config[config_name])
 
-    # Render usa proxy reverso — necessário para HTTPS, IPs reais e CSRF correto
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-    # Inicializa extensões
     db.init_app(app)
     mail.init_app(app)
     csrf.init_app(app)
 
-    # Garante que a pasta de uploads existe
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-    # Registra blueprints
     from routes.auth import auth_bp
     from routes.patient import patient_bp
     from routes.professional import professional_bp
@@ -47,12 +59,10 @@ def create_app(config_name: str = None) -> Flask:
     app.register_blueprint(professional_bp)
     app.register_blueprint(share_bp)
 
-    # Injeta `now` em todos os templates (para usar {{ now.year }}, etc.)
     @app.context_processor
     def inject_now():
         return {'now': datetime.utcnow()}
 
-    # Filtro Jinja: formatar datas no padrão brasileiro
     @app.template_filter('formatar_data')
     def formatar_data(value):
         if value is None:
@@ -61,17 +71,15 @@ def create_app(config_name: str = None) -> Flask:
             return value.strftime('%d/%m/%Y')
         return str(value)
 
-    # Cria tabelas se não existirem
     with app.app_context():
         db.create_all()
+        _migrate_columns(db)
 
-    # Service Worker — precisa estar na raiz do domínio
     @app.route('/sw.js')
     def service_worker():
         return send_from_directory(app.static_folder, 'sw.js',
                                    mimetype='application/javascript')
 
-    # Diagnóstico de clouds — apenas para sessão ativa
     @app.route('/admin/clouds_status')
     def clouds_status():
         if not session.get('user_type'):
@@ -79,7 +87,6 @@ def create_app(config_name: str = None) -> Flask:
         from storage_shamir import clouds_status as _status
         return jsonify(_status())
 
-    # Handlers de erro
     @app.errorhandler(404)
     def not_found(e):
         return render_template('errors/404.html'), 404
