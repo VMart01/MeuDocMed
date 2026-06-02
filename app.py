@@ -21,14 +21,21 @@ csrf = CSRFProtect()
 def _migrate_columns(database):
     """Adiciona colunas novas em tabelas existentes sem destruir dados."""
     migrations = [
-        ('documents', 'storage_type', "VARCHAR(20) DEFAULT 'local'"),
-        ('documents', 'storage_meta', 'TEXT'),
-        ('documents', 'shard3_hex',   'TEXT'),
+        # patients
+        ('patients',   'govbr_verified', 'BOOLEAN DEFAULT FALSE'),
+        # documents
+        ('documents',  'storage_type',   "VARCHAR(20) DEFAULT 'local'"),
+        ('documents',  'storage_meta',   'TEXT'),
+        ('documents',  'shard3_hex',     'TEXT'),
+        # professionals
+        ('professionals', 'registration_verified', 'BOOLEAN DEFAULT FALSE'),
     ]
     with database.engine.connect() as conn:
         for table, column, col_def in migrations:
             try:
-                conn.execute(database.text(f'ALTER TABLE {table} ADD COLUMN {column} {col_def}'))
+                conn.execute(database.text(
+                    f'ALTER TABLE {table} ADD COLUMN {column} {col_def}'
+                ))
                 conn.commit()
             except Exception:
                 conn.rollback()
