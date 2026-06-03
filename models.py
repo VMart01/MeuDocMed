@@ -22,6 +22,8 @@ class Patient(db.Model):
     clinical_notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     govbr_verified = db.Column(db.Boolean, default=False)  # identidade verificada via Gov.br
+    google_sub     = db.Column(db.String(128), unique=True, nullable=True)  # Google OAuth subject ID
+    ext_token_hash = db.Column(db.String(64), nullable=True)               # Token da extensão Chrome
 
     documents = db.relationship('Document', backref='patient', lazy='dynamic',
                                 cascade='all, delete-orphan')
@@ -348,3 +350,27 @@ class PasswordReset(db.Model):
 
     def __repr__(self):
         return f'<PasswordReset pat={self.patient_id}>'
+
+
+# ---------------------------------------------------------------------------
+# Upload pendente (retry automático de shards Shamir com falha)
+# ---------------------------------------------------------------------------
+class PendingUpload(db.Model):
+    __tablename__ = 'pending_uploads'
+
+    id = db.Column(db.Integer, primary_key=True)
+    doc_id = db.Column(db.Integer, db.ForeignKey('documents.id', ondelete='CASCADE'), nullable=False)
+    provider = db.Column(db.String(20), nullable=False)
+    object_key = db.Column(db.String(255), nullable=False)
+    data_hex = db.Column(db.Text, nullable=False)
+    attempts = db.Column(db.Integer, default=0)
+    last_attempt = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    document = db.relationship('Document', backref=db.backref(
+                               'pending_uploads', cascade='all, delete-orphan',
+                               passive_deletes=True))
+
+    def __repr__(self):
+        return f'<PendingUpload doc={self.doc_id} provider={self.provider}>'
+

@@ -199,6 +199,12 @@ def login_paciente():
             )
             db.session.add(log)
             db.session.commit()
+            # Retry assíncrono de shards Shamir pendentes
+            try:
+                import storage_shamir
+                storage_shamir.retry_pending_uploads()
+            except Exception:
+                pass
             return redirect(url_for('patient.dashboard'))
 
         _register_failed_attempt(ip)
@@ -328,6 +334,119 @@ def login_profissional():
         return render_template('auth/login_profissional.html')
 
     return render_template('auth/login_profissional.html')
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth 2.0 — Login/Cadastro de Paciente
+# ---------------------------------------------------------------------------
+GOOGLE_AUTH_URL     = 'https://accounts.google.com/o/oauth2/v2/auth'
+GOOGLE_TOKEN_URL    = 'https://oauth2.googleapis.com/token'
+GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo'
+
+
+@auth_bp.route('/auth/google')
+def google_login():
+    cfg = current_app.config
+    client_id = cfg.get('GOOGLE_CLIENT_ID', '')
+    if not client_id:
+        flash('Login com Google não está configurado neste ambiente.', 'warning')
+        return redirect(url_for('auth.login_paciente'))
+    state = secrets.token_urlsafe(16)
+    session['google_oauth_state'] = state
+    redirect_uri = cfg.get('GOOGLE_REDIRECT_URI',
+                            url_for('auth.google_callback', _external=True))
+    params = http_requests.compat.urlencode({
+        'client_id':     client_id,
+        'redirect_uri':  redirect_uri,
+        'response_type': 'code',
+        'scope':         'openid email profile',
+        'state':         state,
+        'access_type':   'online',
+        'prompt':        'select_account',
+    })
+    return redirect(f'{GOOGLE_AUTH_URL}?{params}')
+
+
+@auth_bp.route('/auth/google/callback')
+def google_callback():
+    cfg = current_app.config
+    client_id     = cfg.get('GOOGLE_CLIENT_ID', '')
+    client_secret = cfg.get('GOOGLE_CLIENT_SECRET', '')
+    if not client_id:
+        flash('Login com Google não está configurado.', 'warning')
+        return redirect(url_for('auth.login_paciente'))
+
+    # Valida state
+    if request.args.get('state') != session.pop('google_oauth_state', None):
+        flash('Falha de segurança no OAuth. Tente novamente.', 'danger')
+        return redirect(url_for('auth.login_paciente'))
+
+    code = request.args.get('code')
+    if not code:
+        flash('Autenticação com Google cancelada.', 'warning')
+        return redirect(url_for('auth.login_paciente'))
+
+    redirect_uri = cfg.get('GOOGLE_REDIRECT_URI',
+                            url_for('auth.google_callback', _external=True))
+
+    # Troca code por token
+    token_resp = http_requests.post(GOOGLE_TOKEN_URL, data={
+        'code':          code,
+        'client_id':     client_id,
+        'client_secret': client_secret,
+        'redirect_uri':  redirect_uri,
+        'grant_type':    'authorization_code',
+    }, timeout=10)
+
+    if token_resp.status_code != 200:
+        flash('Erro ao obter token do Google.', 'danger')
+        return redirect(url_for('auth.login_paciente'))
+
+    access_token = token_resp.json().get('access_token')
+    userinfo = http_requests.get(GOOGLE_USERINFO_URL,
+                                  headers={'Authorization': f'Bearer {access_token}'},
+                                  timeout=10).json()
+
+    google_sub = userinfo.get('sub')
+    email      = userinfo.get('email', '')
+    name       = userinfo.get('name', '')
+
+    if not google_sub:
+        flash('Não foi possível obter dados do Google.', 'danger')
+        return redirect(url_for('auth.login_paciente'))
+
+    # Busca ou cria paciente pelo google_sub
+    patient = Patient.query.filter_by(google_sub=google_sub).first()
+
+    if patient is None:
+        # Tenta associar por e-mail se já existe conta
+        patient = Patient.query.filter_by(email=email.lower()).first()
+        if patient:
+            patient.google_sub = google_sub
+            db.session.commit()
+        else:
+            # Novo paciente via Google — redireciona para completar cadastro
+            session['google_pending'] = {
+                'sub': google_sub, 'email': email, 'name': name}
+            flash('Conta Google autenticada. Complete seu cadastro para continuar.', 'info')
+            return redirect(url_for('auth.cadastro_paciente'))
+
+    login_patient(patient)
+    from models import AccessLog
+    db.session.add(AccessLog(
+        patient_id=patient.id,
+        action='login',
+        description='Login via Google.',
+        ip_address=get_client_ip(),
+        performed_by='patient',
+    ))
+    db.session.commit()
+    try:
+        import storage_shamir
+        storage_shamir.retry_pending_uploads()
+    except Exception:
+        pass
+    return redirect(url_for('patient.dashboard'))
 
 
 # ---------------------------------------------------------------------------

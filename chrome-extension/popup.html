@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MeuDocMed</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; width: 360px; min-height: 200px; background: #f8fafc; color: #1e293b; }
+
+    .header { background: #1a56db; color: #fff; padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+    .header svg { flex-shrink: 0; }
+    .header h1 { font-size: 16px; font-weight: 600; }
+    .header small { font-size: 11px; opacity: .8; }
+
+    .section { padding: 12px 16px; }
+    .section + .section { border-top: 1px solid #e2e8f0; }
+
+    label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+    input, select, textarea { width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; background: #fff; }
+    textarea { resize: vertical; min-height: 56px; }
+
+    .btn { width: 100%; padding: 9px; border: none; border-radius: 7px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .btn-primary { background: #1a56db; color: #fff; }
+    .btn-primary:hover { background: #1e40af; }
+    .btn-secondary { background: #e2e8f0; color: #334155; margin-top: 6px; }
+    .btn-danger { background: #fee2e2; color: #b91c1c; margin-top: 6px; }
+
+    .doc-list { list-style: none; max-height: 180px; overflow-y: auto; }
+    .doc-item { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+    .doc-item:hover { background: #eff6ff; }
+    .doc-item.selected { background: #dbeafe; }
+    .doc-badge { background: #e2e8f0; border-radius: 4px; padding: 1px 5px; font-size: 10px; white-space: nowrap; }
+
+    .alert { padding: 8px 12px; border-radius: 6px; font-size: 12px; margin-bottom: 8px; }
+    .alert-success { background: #dcfce7; color: #166534; }
+    .alert-error { background: #fee2e2; color: #991b1b; }
+    .alert-info { background: #dbeafe; color: #1e40af; }
+
+    #no-token, #token-setup, #main { display: none; }
+    .portal-tag { font-size: 11px; color: #7c3aed; font-weight: 600; margin-bottom: 8px; }
+
+    .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="6" fill="white" fill-opacity=".15"/>
+      <path d="M12 4v4m0 8v4M4 12h4m8 0h4" stroke="white" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="12" cy="12" r="3" fill="white"/>
+    </svg>
+    <div>
+      <h1>MeuDocMed</h1>
+      <small>Captura de documentos de saúde</small>
+    </div>
+  </div>
+
+  <!-- Sem token -->
+  <div id="no-token" class="section">
+    <div class="alert alert-info">Para usar a extensão, gere um token de acesso no MeuDocMed.</div>
+    <button class="btn btn-primary" id="btn-open-mdm">Abrir MeuDocMed</button>
+    <button class="btn btn-secondary" id="btn-enter-token">Já tenho um token</button>
+  </div>
+
+  <!-- Configurar token -->
+  <div id="token-setup" class="section">
+    <label>Cole seu token de acesso:</label>
+    <input type="text" id="token-input" placeholder="Token gerado no MeuDocMed...">
+    <button class="btn btn-primary" id="btn-save-token" style="margin-top:8px">Salvar token</button>
+    <button class="btn btn-secondary" id="btn-cancel-token">Cancelar</button>
+  </div>
+
+  <!-- Interface principal -->
+  <div id="main">
+    <div class="section">
+      <div id="portal-tag" class="portal-tag" style="display:none"></div>
+      <div id="alert-area"></div>
+      <div id="doc-list-area" style="display:none">
+        <label>Documentos detectados na página:</label>
+        <ul class="doc-list" id="doc-list"></ul>
+      </div>
+      <div id="no-docs" class="alert alert-info" style="display:none">Nenhum documento detectado. Use "Selecionar arquivo" para enviar manualmente.</div>
+    </div>
+
+    <div class="section">
+      <div style="margin-bottom:10px">
+        <label>Nome do documento</label>
+        <input type="text" id="doc-name" placeholder="Ex: Hemograma 05/2026">
+      </div>
+      <div style="margin-bottom:10px">
+        <label>Categoria</label>
+        <select id="doc-category">
+          <option value="outro">Carregando...</option>
+        </select>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>Observação (opcional)</label>
+        <textarea id="doc-obs" placeholder="Notas sobre o documento..."></textarea>
+      </div>
+      <div style="margin-bottom:10px">
+        <label>Arquivo manual (opcional)</label>
+        <input type="file" id="file-input" accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.xls,.xlsx,.txt,.zip">
+      </div>
+
+      <div id="selected-info" style="display:none; font-size:12px; color:#475569; margin-bottom:8px; padding:6px; background:#f1f5f9; border-radius:6px;"></div>
+
+      <button class="btn btn-primary" id="btn-send">
+        <span id="btn-send-label">Enviar para MeuDocMed</span>
+      </button>
+      <button class="btn btn-danger" id="btn-reset-token">Trocar token</button>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

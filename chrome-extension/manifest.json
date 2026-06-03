@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "MeuDocMed",
+  "short_name": "MeuDocMed",
+  "version": "1.0.0",
+  "description": "Envie documentos de saúde diretamente para o seu prontuário MeuDocMed.",
+  "icons": {
+    "16":  "icons/icon-16.png",
+    "48":  "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "downloads"],
+  "host_permissions": [
+    "https://meudocmed.onrender.com/*",
+    "https://*.resulta.com.br/*",
+    "https://*.diagnosticosdaamerica.com.br/*",
+    "https://*.einstein.br/*",
+    "https://*.smsrio.org/*",
+    "https://*.rio.rj.gov.br/*",
+    "https://*.esus.saude.gov.br/*",
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "MeuDocMed — Enviar documento"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

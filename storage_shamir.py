@@ -380,3 +380,111 @@ def delete_shamir(file_id, ext):
     if _cloudinary_configured():
         ok &= _cloudinary_delete_shard(f'meudocmed/{shard_key}')
     return ok
+
+
+# ---------------------------------------------------------------------------
+# Retry automático — registra falhas e reenvio
+# ---------------------------------------------------------------------------
+
+def _queue_failed(doc_id, provider, object_key, data):
+    """Registra shard com falha no banco para retry posterior."""
+    try:
+        from models import db, PendingUpload
+        pu = PendingUpload(
+            doc_id=doc_id,
+            provider=provider,
+            object_key=object_key,
+            data_hex=data.hex(),
+        )
+        db.session.add(pu)
+        db.session.commit()
+    except Exception as e:
+        logger.exception("Falha ao registrar pending upload: %s", e)
+
+
+def upload_shamir_with_retry(file_bytes, original_filename, doc_id):
+    """
+    Igual a upload_shamir mas registra shards com falha para retry automático.
+    Deve ser chamado após o Document já ter sido salvo no banco (precisa do doc_id).
+    """
+    try:
+        from utils.file_utils import get_extension
+        ext = get_extension(original_filename)
+        file_id = uuid.uuid4().hex
+
+        password = secrets.token_bytes(32)
+        salt     = secrets.token_bytes(16)
+        key      = _derive_key(password, salt)
+
+        nonce, ciphertext, tag = _aes_encrypt(key, file_bytes)
+        ct_blob = nonce + tag + ciphertext
+
+        s1, s2, s3 = _shamir_split(password)
+
+        file_key  = f'files/{file_id}.enc'
+        shard_key = f'shards/{file_id}'
+
+        ok_file = _b2_put(file_key, ct_blob)
+        ok_s1   = _b2_put(shard_key, s1)
+        ok_s2   = _idrive_put(shard_key, s2)
+        ok_s3   = _cloudinary_put_shard(f'meudocmed/{shard_key}', s3)
+
+        if not ok_file:
+            _queue_failed(doc_id, 'b2_file', file_key, ct_blob)
+        if not ok_s1:
+            _queue_failed(doc_id, 'b2_shard', shard_key, s1)
+        if not ok_s2:
+            _queue_failed(doc_id, 'idrive', shard_key, s2)
+        if not ok_s3:
+            _queue_failed(doc_id, 'cloudinary', f'meudocmed/{shard_key}', s3)
+
+        if not ok_file:
+            logger.error("upload_shamir_with_retry: blob principal falhou no B2 — doc_id=%s", doc_id)
+            return None
+
+        return {
+            'file_id':   file_id,
+            'ext':       ext,
+            'nonce_hex': nonce.hex(),
+            'salt_hex':  salt.hex(),
+        }
+    except Exception as e:
+        logger.exception("upload_shamir_with_retry: %s", e)
+        return None
+
+
+def retry_pending_uploads():
+    """
+    Tenta reenviar shards pendentes. Chamado no login do paciente.
+    Remove entradas bem-sucedidas. Incrementa contador de tentativas nas falhas.
+    Desiste após 10 tentativas.
+    """
+    try:
+        from datetime import datetime as _dt
+        from models import db, PendingUpload
+        pendings = PendingUpload.query.filter(PendingUpload.attempts < 10).all()
+        if not pendings:
+            return
+
+        for pu in pendings:
+            data = bytes.fromhex(pu.data_hex)
+            ok = False
+
+            if pu.provider == 'b2_file':
+                ok = _b2_put(pu.object_key, data)
+            elif pu.provider == 'b2_shard':
+                ok = _b2_put(pu.object_key, data)
+            elif pu.provider == 'idrive':
+                ok = _idrive_put(pu.object_key, data)
+            elif pu.provider == 'cloudinary':
+                ok = _cloudinary_put_shard(pu.object_key, data)
+
+            pu.last_attempt = _dt.utcnow()
+            if ok:
+                db.session.delete(pu)
+            else:
+                pu.attempts += 1
+
+        db.session.commit()
+    except Exception as e:
+        logger.exception("retry_pending_uploads: %s", e)

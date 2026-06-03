@@ -43,6 +43,13 @@ class Config:
     GOVBR_TOKEN_URL     = 'https://sso.acesso.gov.br/token'
     GOVBR_USERINFO_URL  = 'https://sso.acesso.gov.br/userinfo'
 
+    # Google OAuth 2.0
+    # Obtenha em: https://console.cloud.google.com → APIs e Serviços → Credenciais
+    GOOGLE_CLIENT_ID     = os.environ.get('GOOGLE_CLIENT_ID', '')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+    GOOGLE_REDIRECT_URI  = os.environ.get('GOOGLE_REDIRECT_URI',
+                                           'http://localhost:5000/auth/google/callback')
+
 
 class DevelopmentConfig(Config):
     DEBUG = True

@@ -701,6 +701,110 @@ def exportar_historico():
 
 
 # ---------------------------------------------------------------------------
+# API — Extensão Chrome
+# ---------------------------------------------------------------------------
+@patient_bp.route('/api/ext/token', methods=['POST'])
+@login_required
+def ext_generate_token():
+    """Gera token de API para a extensão Chrome. Retorna JSON."""
+    import secrets as _sec
+    import hashlib as _hl
+    patient = get_current_patient()
+    raw = _sec.token_urlsafe(32)
+    patient.ext_token_hash = _hl.sha256(raw.encode()).hexdigest()
+    db.session.commit()
+    return jsonify({'token': raw})
+
+
+@patient_bp.route('/api/ext/upload', methods=['POST'])
+def ext_upload():
+    """
+    Endpoint para a extensão Chrome enviar documentos.
+    Autenticação via Bearer token no header Authorization.
+    """
+    import hashlib as _hl
+    auth_header = request.headers.get('Authorization', '')
+    if not auth_header.startswith('Bearer '):
+        return jsonify({'error': 'Token ausente'}), 401
+
+    raw_token = auth_header[7:]
+    token_hash = _hl.sha256(raw_token.encode()).hexdigest()
+    patient = Patient.query.filter_by(ext_token_hash=token_hash).first()
+    if not patient:
+        return jsonify({'error': 'Token inválido'}), 401
+
+    file = request.files.get('file')
+    name = request.form.get('name', '').strip()
+    category = request.form.get('category', 'outro')
+    observation = request.form.get('observation', '').strip()
+    source_url = request.form.get('source_url', '').strip()
+
+    if not file or not file.filename:
+        return jsonify({'error': 'Arquivo ausente'}), 400
+    if not allowed_extension(file.filename):
+        return jsonify({'error': 'Formato não permitido'}), 400
+    if category not in dict(DOCUMENT_CATEGORIES):
+        category = 'outro'
+
+    file_bytes = file.read()
+    ext = get_extension(file.filename)
+    if not validate_magic_number(file_bytes, ext):
+        return jsonify({'error': 'Conteúdo do arquivo inválido'}), 400
+
+    file_size = len(file_bytes)
+    obs_text = observation or None
+    if source_url:
+        obs_text = (obs_text + '\n' if obs_text else '') + f'Capturado de: {source_url}'
+
+    if storage_shamir.shamir_configured():
+        result = storage_shamir.upload_shamir(file_bytes, file.filename)
+        if not result:
+            return jsonify({'error': 'Falha no armazenamento'}), 500
+        meta = json.dumps({k: result[k] for k in ('file_id', 'ext', 'nonce_hex', 'salt_hex')})
+        doc = Document(
+            patient_id=patient.id,
+            name=name or file.filename,
+            category=category,
+            filename=result['file_id'],
+            original_filename=file.filename,
+            file_size=file_size,
+            observation=obs_text,
+            storage_type='shamir',
+            storage_meta=meta,
+        )
+    else:
+        stored_id = storage.upload_file(file_bytes, file.filename)
+        if not storage._cloudinary_configured():
+            upload_folder = current_app.config['UPLOAD_FOLDER']
+            os.makedirs(upload_folder, exist_ok=True)
+            with open(os.path.join(upload_folder, stored_id), 'wb') as f_out:
+                f_out.write(file_bytes)
+        doc = Document(
+            patient_id=patient.id,
+            name=name or file.filename,
+            category=category,
+            filename=stored_id,
+            original_filename=file.filename,
+            file_size=file_size,
+            observation=obs_text,
+            storage_type='cloudinary' if storage._cloudinary_configured() else 'local',
+        )
+
+    db.session.add(doc)
+    db.session.flush()
+    log_action(patient.id, 'upload',
+               f'Documento "{doc.name}" enviado via extensão Chrome ({file.filename}).')
+    db.session.commit()
+    return jsonify({'ok': True, 'doc_id': doc.id, 'name': doc.name})
+
+
+@patient_bp.route('/api/ext/categories')
+def ext_categories():
+    """Retorna categorias disponíveis para a extensão."""
+    return jsonify([{'key': k, 'label': v} for k, v in DOCUMENT_CATEGORIES])
+
+
+# ---------------------------------------------------------------------------
 # Perfil
 # ---------------------------------------------------------------------------
 @patient_bp.route('/perfil', methods=['GET', 'POST'])
@@ -800,7 +904,15 @@ def excluir_conta():
     # Remove arquivos físicos / Cloudinary
     upload_folder = current_app.config['UPLOAD_FOLDER']
     for doc in patient.documents.all():
-        storage.delete_stored_file(doc.filename, upload_folder)
+        if doc.storage_type == 'shamir' and doc.storage_meta:
+            import json as _j2
+            try:
+                m2 = _j2.loads(doc.storage_meta)
+                storage_shamir.delete_shamir(m2['file_id'], m2['ext'])
+            except Exception:
+                pass
+        else:
+            storage.delete_stored_file(doc.filename, upload_folder)
 
     db.session.delete(patient)
     db.session.commit()

@@ -25,6 +25,8 @@ def _migrate_columns(database):
         ('documents',     'storage_type',           "VARCHAR(20) DEFAULT 'local'"),
         ('documents',     'storage_meta',           'TEXT'),
         ('professionals', 'registration_verified',  'BOOLEAN DEFAULT FALSE'),
+        ('patients',      'google_sub',               'VARCHAR(128)'),
+        ('patients',      'ext_token_hash',           'VARCHAR(64)'),
     ]
     drop_cols = [
         ('documents', 'shard3_hex'),
