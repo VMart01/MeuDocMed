@@ -124,6 +124,36 @@
   </div>
 </div>
 
+<!-- Seção Extensão Chrome -->
+<div class="card" style="margin-top:1.5rem">
+  <div class="card-header">
+    <h2 class="card-title"><i class="fa fa-puzzle-piece"></i> Extensão Chrome</h2>
+  </div>
+  <div class="card-body">
+    <p class="text-sm text-muted" style="margin-bottom:1rem">
+      Gere um token para conectar a extensão Chrome ao seu prontuário.
+      O token permite que a extensão envie documentos diretamente para sua conta.
+      Gerar um novo token invalida o anterior.
+    </p>
+    <div id="ext-token-area" style="display:none;margin-bottom:1rem">
+      <label class="form-label">Seu token de acesso:</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" id="ext-token-value" readonly
+               style="flex:1;font-family:monospace;font-size:13px;background:#f8fafc">
+        <button type="button" onclick="copyToken()" class="btn btn-outline btn-sm">
+          <i class="fa fa-copy"></i> Copiar
+        </button>
+      </div>
+      <p class="text-sm text-muted" style="margin-top:6px;color:#dc2626">
+        Guarde este token agora — ele não será exibido novamente.
+      </p>
+    </div>
+    <button type="button" class="btn btn-secondary" onclick="generateToken()">
+      <i class="fa fa-key"></i> Gerar token para a extensão
+    </button>
+  </div>
+</div>
+
 <!-- Modal Excluir Conta -->
 <div class="modal-overlay" id="delete-modal" style="display:none">
   <div class="modal">
@@ -148,6 +178,29 @@
 document.getElementById('delete-modal').addEventListener('click', function(e) {
   if (e.target === this) this.style.display = 'none';
 });
+
+async function generateToken() {
+  try {
+    const resp = await fetch('{{ url_for("patient.ext_generate_token") }}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': '{{ csrf_token() }}' },
+    });
+    const data = await resp.json();
+    if (data.token) {
+      document.getElementById('ext-token-value').value = data.token;
+      document.getElementById('ext-token-area').style.display = 'block';
+    }
+  } catch(e) {
+    alert('Erro ao gerar token. Tente novamente.');
+  }
+}
+
+function copyToken() {
+  const input = document.getElementById('ext-token-value');
+  input.select();
+  document.execCommand('copy');
+  alert('Token copiado!');
+}
 </script>
 {% endblock %}
 {% endblock %}
