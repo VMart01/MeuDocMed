@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import Flask, render_template, send_from_directory, jsonify, session, abort
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
+from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
@@ -70,6 +71,9 @@ def create_app(config_name=None):
     app.register_blueprint(patient_bp)
     app.register_blueprint(professional_bp)
     app.register_blueprint(share_bp)
+
+    # CORS para extensão Chrome
+    CORS(app, resources={r"/paciente/api/ext/*": {"origins": "*"}})
 
     @app.context_processor
     def inject_now():
