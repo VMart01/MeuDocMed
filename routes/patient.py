@@ -20,6 +20,7 @@ from utils.file_utils import (allowed_extension, validate_magic_number,
                                is_viewable_inline, get_extension)
 from utils import storage
 import storage_shamir
+from extensions import csrf
 from utils.notifications import sse_stream
 from utils.pdf_utils import generate_history_pdf
 
@@ -704,6 +705,7 @@ def exportar_historico():
 # API — Extensão Chrome
 # ---------------------------------------------------------------------------
 @patient_bp.route('/api/ext/token', methods=['POST'])
+@csrf.exempt
 @login_required
 def ext_generate_token():
     """Gera token de API para a extensão Chrome. Retorna JSON."""
@@ -717,6 +719,7 @@ def ext_generate_token():
 
 
 @patient_bp.route('/api/ext/upload', methods=['POST'])
+@csrf.exempt
 def ext_upload():
     """
     Endpoint para a extensão Chrome enviar documentos.

@@ -4,9 +4,8 @@ MeuDocMed — Aplicação Flask principal.
 import os
 from datetime import datetime
 from flask import Flask, render_template, send_from_directory, jsonify, session, abort
-from flask_mail import Mail
-from flask_wtf.csrf import CSRFProtect
 from flask_cors import CORS
+from extensions import csrf, mail
 from werkzeug.middleware.proxy_fix import ProxyFix
 from dotenv import load_dotenv
 
@@ -15,8 +14,6 @@ from models import db
 
 load_dotenv()
 
-mail = Mail()
-csrf = CSRFProtect()
 
 
 def _migrate_columns(database):
