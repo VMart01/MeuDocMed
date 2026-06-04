@@ -37,7 +37,6 @@
     .alert-error { background: #fee2e2; color: #991b1b; }
     .alert-info { background: #dbeafe; color: #1e40af; }
 
-    #no-token, #token-setup, #main { display: none; }
     .portal-tag { font-size: 11px; color: #7c3aed; font-weight: 600; margin-bottom: 8px; }
 
     .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite; vertical-align: middle; }
@@ -65,7 +64,7 @@
   </div>
 
   <!-- Configurar token -->
-  <div id="token-setup" class="section">
+  <div id="token-setup" class="section" style="display:none">
     <label>Cole seu token de acesso:</label>
     <input type="text" id="token-input" placeholder="Token gerado no MeuDocMed...">
     <button class="btn btn-primary" id="btn-save-token" style="margin-top:8px">Salvar token</button>
@@ -73,7 +72,7 @@
   </div>
 
   <!-- Interface principal -->
-  <div id="main">
+  <div id="main" style="display:none">
     <div class="section">
       <div id="portal-tag" class="portal-tag" style="display:none"></div>
       <div id="alert-area"></div>
